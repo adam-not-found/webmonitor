@@ -1,17 +1,27 @@
 import os, json, time, subprocess, smtplib
+from datetime import datetime
 from email.message import EmailMessage
 
 CONFIG_PATH = os.path.expanduser("~/.webmonitor/config.json")
-LAST_ALERT = {}
+LAST_ALERT_TITLE = "" # Tracks the last title to prevent repeat alerts on same page
 
 def send_desktop_alert(word, title):
-    # This creates the macOS notification banner
-    apple_script = f'display notification "{title}" with title "⚠️ Trigger Detected: {word}"'
-    subprocess.run(['osascript', '-e', apple_script])
+    # 'afplay' plays the system sound, 'display notification' shows the banner
+    cmd = f'afplay /System/Library/Sounds/Glass.aiff; osascript -e "display notification \"{title}\" with title \"⚠️ Trigger: {word}\" sound name \"Glass\""'
+    subprocess.Popen(cmd, shell=True)
 
-def send_email(word, title, config):
+def send_email(word, title, url, timestamp, config):
     msg = EmailMessage()
-    msg.set_content(f"Trigger word '{word}' detected in browser window: {title}")
+    content = f"""
+    ⚠️ WebMonitor Alert Details:
+    --------------------------
+    Trigger Word: {word}
+    Window Title: {title}
+    URL:          {url}
+    Time:         {timestamp}
+    --------------------------
+    """
+    msg.set_content(content)
     msg['Subject'] = f"⚠️ WebMonitor Alert: {word}"
     msg['From'] = config['sender_email']
     msg['To'] = config['recipient_email']
@@ -25,11 +35,14 @@ def send_email(word, title, config):
         with open(os.path.expanduser("~/.webmonitor/error.txt"), "a") as f:
             f.write(f"Email failed: {e}\n")
 
-def get_window_title():
-    safari_cmd = 'tell application "Safari" to get name of window 1'
+def get_safari_data():
+    # Gets both Title and URL from Safari
+    cmd = 'tell application "Safari" to tell document 1 to return {name, URL}'
     try:
-        return subprocess.check_output(['osascript', '-e', safari_cmd]).decode().strip()
-    except: return ""
+        output = subprocess.check_output(['osascript', '-e', cmd]).decode().strip()
+        parts = output.split(", ")
+        return parts[0], parts[1] if len(parts) > 1 else "Unknown URL"
+    except: return "", ""
 
 while True:
     try:
@@ -37,15 +50,19 @@ while True:
             with open(CONFIG_PATH, 'r') as f:
                 config = json.load(f)
             
-            current_title = get_window_title()
-            for word in config['trigger_words']:
-                if word.lower() in current_title.lower():
-                    now = time.time()
-                    # COOLDOWN REDUCED TO 5 SECONDS
-                    if word not in LAST_ALERT or (now - LAST_ALERT[word]) > 5:
-                        print(f"🎯 MATCH: {word}")
-                        send_desktop_alert(word, current_title)
-                        send_email(word, current_title, config)
-                        LAST_ALERT[word] = now
+            title, url = get_safari_data()
+            
+            # Check if title contains any trigger word AND is different from the last alert
+            if title != LAST_ALERT_TITLE:
+                for word in config['trigger_words']:
+                    if word.lower() in title.lower():
+                        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        print(f"🎯 MATCH: {word} at {timestamp}")
+                        
+                        send_desktop_alert(word, title)
+                        send_email(word, title, url, timestamp, config)
+                        
+                        LAST_ALERT_TITLE = title # Lock this title so it won't repeat
+                        break 
     except Exception as e: pass
-    time.sleep(2) # Checks every 2 seconds for snappier response
+    time.sleep(3)
