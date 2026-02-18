@@ -21,9 +21,7 @@ def send_email(word, title, url, timestamp, config):
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
             smtp.login(config['sender_email'], config['app_password'])
             smtp.send_message(msg)
-    except Exception as e:
-        with open(os.path.expanduser("~/.webmonitor/error.txt"), "a") as f:
-            f.write(f"Email failed: {e}\n")
+    except Exception: pass
 
 def get_safari_data():
     cmd = 'tell application "Safari" to tell document 1 to return {name, URL}'
@@ -41,9 +39,11 @@ while True:
             
             title, url = get_safari_data()
             
-            if title and title != LAST_ALERT_TITLE:
+            # Check Whitelist
+            is_whitelisted = any(site.lower() in url.lower() for site in config.get('whitelist', []))
+            
+            if title and title != LAST_ALERT_TITLE and not is_whitelisted:
                 for word in config['trigger_words']:
-                    # regex \b matches "word boundaries" (spaces, dots, start/end of line)
                     if re.search(r'\b' + re.escape(word.lower()) + r'\b', title.lower()):
                         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         send_desktop_alert(word, title)
