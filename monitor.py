@@ -1,65 +1,92 @@
-import sqlite3
-import os
-import time
-import json
-import smtplib
+import subprocess, time, json, smtplib, os, re, urllib.parse
 from email.message import EmailMessage
 
 CONFIG_PATH = os.path.expanduser("~/.webmonitor/config.json")
-HISTORY_PATH = os.path.expanduser("~/Library/Safari/History.db")
 
 def load_config():
     with open(CONFIG_PATH, 'r') as f:
         return json.load(f)
 
-def send_alert(url, title, trigger):
+def send_email(subject, content):
     config = load_config()
     msg = EmailMessage()
-    msg.set_content(f"⚠️ TRIGGER DETECTED\n\nTrigger Word: {trigger}\nURL: {url}\nTitle: {title}\nTime: {time.ctime()}")
-    msg['Subject'] = f"🚨 WebMonitor Alert: {trigger}"
+    msg['Subject'] = f"🛡️ WebMonitor: {subject}"
     msg['From'] = config['sender_email']
     msg['To'] = config['recipient_email']
     msg['Cc'] = config['cc_email']
-
+    msg.set_content(content)
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
             smtp.login(config['sender_email'], config['app_password'])
             smtp.send_message(msg)
-            print(f"✅ Alert sent for: {trigger}")
     except Exception as e:
-        print(f"❌ Alert failed: {e}")
+        print(f"Email Error: {e}")
 
-def check_history():
-    config = load_config()
+def get_active_browser_content():
+    script = """
+    tell application "System Events"
+        set frontApp to name of first application process whose frontmost is true
+    end tell
+    if frontApp is "Safari" then
+        tell application "Safari" to return URL of front document
+    else if frontApp is "Google Chrome" then
+        tell application "Google Chrome" to return URL of active tab of front window
+    else
+        return "None"
+    end if
+    """
     try:
-        conn = sqlite3.connect(HISTORY_PATH)
-        cursor = conn.cursor()
-        # Look for visits in the last 2 minutes
-        query = """
-        SELECT history_items.url, history_visits.title 
-        FROM history_items 
-        JOIN history_visits ON history_items.id = history_visits.history_item
-        WHERE history_visits.visit_time > (strftime('%s', 'now') - 120 + 978307200)
-        """
-        cursor.execute(query)
-        results = cursor.fetchall()
-        conn.close()
+        res = subprocess.check_output(['osascript', '-e', script]).decode('utf-8').strip()
+        return res if res != "" else "None"
+    except: return "None"
 
-        for url, title in results:
-            # Skip whitelisted items
-            if any(site in url for site in config['whitelist']):
-                continue
-            
-            # Check for trigger words
-            for word in config['trigger_words']:
-                if word.lower() in url.lower() or (title and word.lower() in title.lower()):
-                    send_alert(url, title, word)
-                    return # Alert once per check to avoid spam
-    except Exception as e:
-        print(f"Database error: {e}")
+def clean_display_text(raw_content):
+    if raw_content.startswith("http"):
+        match = re.search(r'[?&](q|query)=([^&]+)', raw_content)
+        if match:
+            query = urllib.parse.unquote(match.group(2)).replace('+', ' ')
+            return f"Search: {query}"
+        try:
+            domain = raw_content.split('/')[2]
+            return f"Visit: {domain}"
+        except: return raw_content
+    return raw_content
+
+last_flagged_content = set()
 
 if __name__ == "__main__":
-    print("🛡️ Monitoring Engine active. Press Ctrl+C to stop.")
+    print("🛡️  Live Monitor Engine Started (Window Detection)")
     while True:
-        check_history()
-        time.sleep(60)
+        try:
+            config = load_config()
+            content = get_active_browser_content()
+            
+            if content != "None":
+                content_lower = content.lower()
+                
+                # Check Whitelist
+                if any(site in content_lower for site in config['whitelist'] if site):
+                    time.sleep(4); continue
+
+                # Check Keywords
+                if content not in last_flagged_content:
+                    for k in config['trigger_words']:
+                        if not k: continue
+                        
+                        pattern = rf"(^|[^a-zA-Z0-9]){re.escape(k.lower())}($|[^a-zA-Z0-9])"
+                        if re.search(pattern, content_lower):
+                            activity = clean_display_text(content)
+                            print(f"🎯 MATCH: {k}")
+                            
+                            # Desktop Notification
+                            subprocess.run(['osascript', '-e', f'display notification "{activity}" with title "🚨 Triggered: {k}" sound name "Basso"'])
+                            
+                            # Email Alert
+                            email_body = f"Activity: {activity}\nKeyword Detected: {k}\n\nFull Source:\n{content}"
+                            send_email(f"🚨 ALERT: {k} Detected", email_body)
+                            
+                            last_flagged_content.add(content)
+                            break
+        except Exception as e:
+            print(f"Loop Error: {e}")
+        time.sleep(4)
