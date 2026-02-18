@@ -1,8 +1,10 @@
 #!/bin/bash
 BLUE='\033[0;34m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
-mkdir -p ~/.webmonitor
 GUID=$(id -u)
 PLIST="$HOME/Library/LaunchAgents/com.webmonitor.engine.plist"
+
+# CRITICAL: Create directory before anything else
+mkdir -p ~/.webmonitor
 
 echo -e "${BLUE}🛡️ WebMonitor: Setup Wizard${NC}"
 echo "=================================="
@@ -50,12 +52,9 @@ XML
 
 echo -e "\n${BLUE}🔍 Initializing Engine...${NC}"
 
-# 4. FORCE REFRESH (This fixes the "Bootstrap failed" error)
+# 4. Force Bootstrap
 launchctl bootout gui/$GUID "$PLIST" 2>/dev/null
-# Wait 1 second for macOS to release the process
-sleep 1 
-
-# 5. Start Fresh
+sleep 1
 launchctl bootstrap gui/$GUID "$PLIST"
 launchctl kickstart -k gui/$GUID/com.webmonitor.engine
 
