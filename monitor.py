@@ -1,9 +1,13 @@
 import os, json, time, subprocess, smtplib
 from email.message import EmailMessage
 
-# Configuration paths
 CONFIG_PATH = os.path.expanduser("~/.webmonitor/config.json")
 LAST_ALERT = {}
+
+def send_desktop_alert(word, title):
+    # This creates the macOS notification banner
+    apple_script = f'display notification "{title}" with title "⚠️ Trigger Detected: {word}"'
+    subprocess.run(['osascript', '-e', apple_script])
 
 def send_email(word, title, config):
     msg = EmailMessage()
@@ -22,11 +26,8 @@ def send_email(word, title, config):
             f.write(f"Email failed: {e}\n")
 
 def get_window_title():
-    # Detects title from Safari or Chrome
-    cmd = 'tell application "System Events" to get name of (processes where background read only is false and name is "Safari" or name is "Google Chrome")'
+    safari_cmd = 'tell application "Safari" to get name of window 1'
     try:
-        # Simplified for testing; focuses on active Safari window
-        safari_cmd = 'tell application "Safari" to get name of window 1'
         return subprocess.check_output(['osascript', '-e', safari_cmd]).decode().strip()
     except: return ""
 
@@ -36,14 +37,15 @@ while True:
             with open(CONFIG_PATH, 'r') as f:
                 config = json.load(f)
             
-            title = get_window_title()
+            current_title = get_window_title()
             for word in config['trigger_words']:
-                if word.lower() in title.lower():
+                if word.lower() in current_title.lower():
                     now = time.time()
-                    # Only alert if word hasn't been seen in the last 60 seconds
-                    if word not in LAST_ALERT or (now - LAST_ALERT[word]) > 60:
+                    # COOLDOWN REDUCED TO 5 SECONDS
+                    if word not in LAST_ALERT or (now - LAST_ALERT[word]) > 5:
                         print(f"🎯 MATCH: {word}")
-                        send_email(word, title, config)
+                        send_desktop_alert(word, current_title)
+                        send_email(word, current_title, config)
                         LAST_ALERT[word] = now
     except Exception as e: pass
-    time.sleep(5)
+    time.sleep(2) # Checks every 2 seconds for snappier response
