@@ -1,6 +1,6 @@
 #!/bin/bash
 GUID=$(id -u)
-PLIST="$HOME/Library/LaunchAgents/com.webmonitor.engine.plist"
+PLIST="$HOME/Library/LaunchAgents/com.webmonitor.app.plist"
 
 echo "----------------------------------"
 echo "🛡️  WebMonitor Command Center"

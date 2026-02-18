@@ -1,26 +1,18 @@
 #!/bin/bash
-BLUE='\033[0;34m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 GUID=$(id -u)
-PLIST="$HOME/Library/LaunchAgents/com.webmonitor.engine.plist"
-
-# Ensure environment is ready
+PLIST="$HOME/Library/LaunchAgents/com.webmonitor.app.plist"
 mkdir -p ~/.webmonitor
 touch ~/.webmonitor/log.txt
 pkill -f monitor.py 2>/dev/null
-
-echo -e "${BLUE}🛡️ WebMonitor: Setup Wizard${NC}"
+echo "🛡️ WebMonitor: Setup Wizard"
 echo "=================================="
-
-# 1. Collect Data
 read -p "Enter SENDER Gmail: " SENDER
 read -p "Enter 16-char App Password: " PASS
 PASS_CLEAN=$(echo $PASS | tr -d ' ')
 read -p "Enter Partner Email: " PRIMARY
-read -p "Would you like to be CC'd on alerts for transparency? (y/n): " WANT_CC
+read -p "CC yourself? (y/n): " WANT_CC
 CC_EMAIL=""
 [[ "$WANT_CC" =~ ^[Yy]$ ]] && CC_EMAIL="$SENDER"
-
-# 2. Create Config
 cat << JSON > ~/.webmonitor/config.json
 {
     "sender_email": "$SENDER",
@@ -31,8 +23,6 @@ cat << JSON > ~/.webmonitor/config.json
     "whitelist": ["apple.com"]
 }
 JSON
-
-# 3. Create Launch Agent with Unique Label
 cat << XML > "$PLIST"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -51,14 +41,8 @@ cat << XML > "$PLIST"
     <key>StandardErrorPath</key><string>$HOME/.webmonitor/error.txt</string>
 </dict>
 XML
-
-echo -e "\n${BLUE}🔍 Initializing Engine...${NC}"
-
-# 4. Bootstrap Logic
 launchctl bootout gui/$GUID "$PLIST" 2>/dev/null
 sleep 1
 launchctl bootstrap gui/$GUID "$PLIST"
 launchctl kickstart -k gui/$GUID/com.webmonitor.app
-
-echo -e "${GREEN}✅ Installation Complete!${NC}"
-echo -e "🛠️  Manage with: ./webmonitor.sh"
+echo "✅ Installed and Running."
