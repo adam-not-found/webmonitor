@@ -2,8 +2,9 @@
 BLUE='\033[0;34m'; GREEN='\033[0;32m'; NC='\033[0m'
 mkdir -p ~/.webmonitor
 touch ~/.webmonitor/log.txt
+pkill -f monitor.py 2>/dev/null
 
-echo "🛡️ WebMonitor: Setup Wizard (Robust Mode)"
+echo "🛡️ WebMonitor: Setup Wizard"
 echo "=================================="
 
 # 1. Collect Data
@@ -15,25 +16,22 @@ read -p "CC yourself? (y/n): " WANT_CC
 CC_EMAIL=""
 [[ "$WANT_CC" =~ ^[Yy]$ ]] && CC_EMAIL="$SENDER"
 
-# 2. Create Config
+# 2. Create Config (Adding 'test' and 'testing123' as defaults)
 cat << JSON > ~/.webmonitor/config.json
 {
     "sender_email": "$SENDER",
     "app_password": "$PASS_CLEAN",
     "recipient_email": "$PRIMARY",
     "cc_email": "$CC_EMAIL",
-    "trigger_words": ["testing123"],
+    "trigger_words": ["test", "testing123"],
     "whitelist": ["apple.com"]
 }
 JSON
 
-# 3. Use Cron for Auto-Start (Avoids Launchctl Error 5)
-# This clears old webmonitor cron jobs and adds a fresh one
+# 3. Setup Auto-Start (Cron)
 (crontab -l 2>/dev/null | grep -v "monitor.py"; echo "@reboot python3 $HOME/webmonitor/monitor.py >> $HOME/.webmonitor/log.txt 2>&1 &") | crontab -
 
-# 4. Start the engine immediately for this session
-pkill -f monitor.py 2>/dev/null
+# 4. Start Now
 nohup python3 $HOME/webmonitor/monitor.py >> $HOME/.webmonitor/log.txt 2>&1 &
 
-echo -e "${GREEN}✅ Installed and Running via Cron!${NC}"
-echo "The engine will now start automatically whenever the Mac reboots."
+echo -e "${GREEN}✅ Installation Complete!${NC}"
