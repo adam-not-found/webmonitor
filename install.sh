@@ -6,11 +6,6 @@ PLIST="$HOME/Library/LaunchAgents/com.webmonitor.engine.plist"
 
 echo -e "${BLUE}🛡️ WebMonitor: Setup Wizard${NC}"
 echo "=================================="
-echo -e "${YELLOW}⚠️  Action Required: Gmail App Password${NC}"
-echo "1. Go to: https://myaccount.google.com/security"
-echo "2. Search for 'App passwords' at the TOP search bar."
-echo "3. Create one named 'WebMonitor' and copy the code."
-echo "----------------------------------"
 
 # 1. Collect Data
 read -p "Enter SENDER Gmail: " SENDER
@@ -33,7 +28,7 @@ cat << JSON > ~/.webmonitor/config.json
 }
 JSON
 
-# 3. Create Launch Agent (With -u flag for logs)
+# 3. Create Launch Agent
 cat << XML > "$PLIST"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -53,31 +48,16 @@ cat << XML > "$PLIST"
 </dict>
 XML
 
-# 4. System Tests & Session Attachment
-echo -e "\n${BLUE}🔍 Running System Tests...${NC}"
+echo -e "\n${BLUE}🔍 Initializing Engine...${NC}"
 
-# Test Permissions
-if osascript -e 'tell application "Safari" to return URL of front document' >/dev/null 2>&1; then
-    echo -e "Checking macOS Accessibility permissions... ${GREEN}PASS${NC}"
-else
-    echo -e "Checking macOS Accessibility permissions... ${RED}FAIL${NC}"
-    echo -e "${YELLOW}👉 FIX: Go to System Settings > Privacy & Security > Accessibility and toggle 'python3' ON.${NC}"
-fi
-
-# Test Gmail
-python3 -c "import smtplib; s=smtplib.SMTP_SSL('smtp.gmail.com', 465); s.login('$SENDER', '$PASS_CLEAN'); s.quit()" >/dev/null 2>&1
-if [ $? -eq 0 ]; then
-    echo -e "Checking Gmail connection... ${GREEN}PASS${NC}"
-else
-    echo -e "Checking Gmail connection... ${RED}FAIL${NC}"
-fi
-
-# 5. Force Bootstrap to the UI Session
+# 4. FORCE REFRESH (This fixes the "Bootstrap failed" error)
 launchctl bootout gui/$GUID "$PLIST" 2>/dev/null
+# Wait 1 second for macOS to release the process
+sleep 1 
+
+# 5. Start Fresh
 launchctl bootstrap gui/$GUID "$PLIST"
 launchctl kickstart -k gui/$GUID/com.webmonitor.engine
 
-echo -e "\n${GREEN}✅ Installation Complete!${NC}"
-echo -e "----------------------------------"
-echo -e "🚀 The engine is now running in the background."
-echo -e "🛠️  To manage settings or triggers, run: ${BLUE}./webmonitor.sh${NC}"
+echo -e "${GREEN}✅ Installation Complete!${NC}"
+echo -e "🛠️  Manage with: ./webmonitor.sh"
