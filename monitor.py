@@ -3,12 +3,12 @@ from datetime import datetime
 from email.message import EmailMessage
 
 CONFIG_PATH = os.path.expanduser("~/.webmonitor/config.json")
-LAST_ALERT_TITLE = "" # Tracks the last title to prevent repeat alerts on same page
+LAST_ALERT_TITLE = ""
 
 def send_desktop_alert(word, title):
-    # 'afplay' plays the system sound, 'display notification' shows the banner
-    cmd = f'afplay /System/Library/Sounds/Glass.aiff; osascript -e "display notification \"{title}\" with title \"⚠️ Trigger: {word}\" sound name \"Glass\""'
-    subprocess.Popen(cmd, shell=True)
+    # This creates the banner and the sound simultaneously
+    script = f'display notification "{title}" with title "Trigger word: {word}" sound name "Glass"'
+    subprocess.run(['osascript', '-e', script])
 
 def send_email(word, title, url, timestamp, config):
     msg = EmailMessage()
@@ -36,7 +36,6 @@ def send_email(word, title, url, timestamp, config):
             f.write(f"Email failed: {e}\n")
 
 def get_safari_data():
-    # Gets both Title and URL from Safari
     cmd = 'tell application "Safari" to tell document 1 to return {name, URL}'
     try:
         output = subprocess.check_output(['osascript', '-e', cmd]).decode().strip()
@@ -52,17 +51,16 @@ while True:
             
             title, url = get_safari_data()
             
-            # Check if title contains any trigger word AND is different from the last alert
-            if title != LAST_ALERT_TITLE:
+            if title and title != LAST_ALERT_TITLE:
                 for word in config['trigger_words']:
                     if word.lower() in title.lower():
                         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        print(f"🎯 MATCH: {word} at {timestamp}")
+                        print(f"🎯 MATCH: {word}")
                         
                         send_desktop_alert(word, title)
                         send_email(word, title, url, timestamp, config)
                         
-                        LAST_ALERT_TITLE = title # Lock this title so it won't repeat
+                        LAST_ALERT_TITLE = title
                         break 
     except Exception as e: pass
     time.sleep(3)
