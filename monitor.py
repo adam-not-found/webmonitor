@@ -1,92 +1,49 @@
-import subprocess, time, json, smtplib, os, re, urllib.parse
+import os, json, time, subprocess, smtplib
 from email.message import EmailMessage
 
+# Configuration paths
 CONFIG_PATH = os.path.expanduser("~/.webmonitor/config.json")
+LAST_ALERT = {}
 
-def load_config():
-    with open(CONFIG_PATH, 'r') as f:
-        return json.load(f)
-
-def send_email(subject, content):
-    config = load_config()
+def send_email(word, title, config):
     msg = EmailMessage()
-    msg['Subject'] = f"🛡️ WebMonitor: {subject}"
+    msg.set_content(f"Trigger word '{word}' detected in browser window: {title}")
+    msg['Subject'] = f"⚠️ WebMonitor Alert: {word}"
     msg['From'] = config['sender_email']
     msg['To'] = config['recipient_email']
-    msg['Cc'] = config['cc_email']
-    msg.set_content(content)
+    if config.get('cc_email'): msg['Cc'] = config['cc_email']
+    
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
             smtp.login(config['sender_email'], config['app_password'])
             smtp.send_message(msg)
     except Exception as e:
-        print(f"Email Error: {e}")
+        with open(os.path.expanduser("~/.webmonitor/error.txt"), "a") as f:
+            f.write(f"Email failed: {e}\n")
 
-def get_active_browser_content():
-    script = """
-    tell application "System Events"
-        set frontApp to name of first application process whose frontmost is true
-    end tell
-    if frontApp is "Safari" then
-        tell application "Safari" to return URL of front document
-    else if frontApp is "Google Chrome" then
-        tell application "Google Chrome" to return URL of active tab of front window
-    else
-        return "None"
-    end if
-    """
+def get_window_title():
+    # Detects title from Safari or Chrome
+    cmd = 'tell application "System Events" to get name of (processes where background read only is false and name is "Safari" or name is "Google Chrome")'
     try:
-        res = subprocess.check_output(['osascript', '-e', script]).decode('utf-8').strip()
-        return res if res != "" else "None"
-    except: return "None"
+        # Simplified for testing; focuses on active Safari window
+        safari_cmd = 'tell application "Safari" to get name of window 1'
+        return subprocess.check_output(['osascript', '-e', safari_cmd]).decode().strip()
+    except: return ""
 
-def clean_display_text(raw_content):
-    if raw_content.startswith("http"):
-        match = re.search(r'[?&](q|query)=([^&]+)', raw_content)
-        if match:
-            query = urllib.parse.unquote(match.group(2)).replace('+', ' ')
-            return f"Search: {query}"
-        try:
-            domain = raw_content.split('/')[2]
-            return f"Visit: {domain}"
-        except: return raw_content
-    return raw_content
-
-last_flagged_content = set()
-
-if __name__ == "__main__":
-    print("🛡️  Live Monitor Engine Started (Window Detection)")
-    while True:
-        try:
-            config = load_config()
-            content = get_active_browser_content()
+while True:
+    try:
+        if os.path.exists(CONFIG_PATH):
+            with open(CONFIG_PATH, 'r') as f:
+                config = json.load(f)
             
-            if content != "None":
-                content_lower = content.lower()
-                
-                # Check Whitelist
-                if any(site in content_lower for site in config['whitelist'] if site):
-                    time.sleep(4); continue
-
-                # Check Keywords
-                if content not in last_flagged_content:
-                    for k in config['trigger_words']:
-                        if not k: continue
-                        
-                        pattern = rf"(^|[^a-zA-Z0-9]){re.escape(k.lower())}($|[^a-zA-Z0-9])"
-                        if re.search(pattern, content_lower):
-                            activity = clean_display_text(content)
-                            print(f"🎯 MATCH: {k}")
-                            
-                            # Desktop Notification
-                            subprocess.run(['osascript', '-e', f'display notification "{activity}" with title "🚨 Triggered: {k}" sound name "Basso"'])
-                            
-                            # Email Alert
-                            email_body = f"Activity: {activity}\nKeyword Detected: {k}\n\nFull Source:\n{content}"
-                            send_email(f"🚨 ALERT: {k} Detected", email_body)
-                            
-                            last_flagged_content.add(content)
-                            break
-        except Exception as e:
-            print(f"Loop Error: {e}")
-        time.sleep(4)
+            title = get_window_title()
+            for word in config['trigger_words']:
+                if word.lower() in title.lower():
+                    now = time.time()
+                    # Only alert if word hasn't been seen in the last 60 seconds
+                    if word not in LAST_ALERT or (now - LAST_ALERT[word]) > 60:
+                        print(f"🎯 MATCH: {word}")
+                        send_email(word, title, config)
+                        LAST_ALERT[word] = now
+    except Exception as e: pass
+    time.sleep(5)
