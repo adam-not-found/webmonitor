@@ -33,7 +33,6 @@ def handle_event(event_type, value="", old_val=""):
     if not os.path.exists(CONFIG_PATH): return
     with open(CONFIG_PATH, 'r') as f: config = json.load(f)
     
-    # Check if this specific alert is toggled ON (except mandatory ones)
     mandatory = ["settings_adjusted", "recipient_changed", "service_restarted", "service_stopped"]
     if event_type not in mandatory:
         if not config.get('alerts', {}).get(event_type, True): return
@@ -47,13 +46,16 @@ def handle_event(event_type, value="", old_val=""):
     }
     
     raw_sub = subjects.get(event_type, "🛡️ WebMonitor Notification")
-    
+    now_str = datetime.now().strftime("%b %d at %I:%M%p")
+
     if event_type == "word_found":
-        body = f"An automated scan has detected a restricted keyword.\n\n{value}\n\nTime of Event: {datetime.now()}"
+        body = f"An automated scan detected a restricted keyword on {now_str}.\n\n{value}"
     elif event_type == "recipient_changed":
-        body = f"The primary alert recipient has been updated.\nMessages will no longer be sent to the old address.\n\nOLD RECIPIENT: {old_val}\nNEW RECIPIENT: {value}\n\nTime: {datetime.now()}"
+        body = f"The primary alert recipient was updated on {now_str}.\n\nOLD RECIPIENT: {old_val}\nNEW RECIPIENT: {value}\n\nNotifications will now be sent to the new address."
+    elif event_type == "service_restarted":
+        body = f"The WebMonitor engine was manually restarted on {now_str}. All monitoring is now active with the latest settings."
     else:
-        body = f"Configuration Update Details:\n{value}\n\nTime: {datetime.now()}"
+        body = f"A setting was adjusted on {now_str}.\n\nDescription: {value}"
     
     if event_type == "recipient_changed":
         send_email(raw_sub, body, config, target_email=old_val)
@@ -86,7 +88,6 @@ while True:
             if not is_whitelisted:
                 for word in config.get('trigger_words', []):
                     clean_w = clean(word).lower()
-                    # REGEX: \b ensures "test" matches "test" but not "testify"
                     if re.search(r'\b' + re.escape(clean_w) + r'\b', title.lower()):
                         os.system(f'osascript -e \'display notification "Trigger word detected: {word}" with title "🛡️ WebMonitor Alert" sound name "Glass"\'')
                         handle_event("word_found", f"Trigger Word: {word}\nPage Title: {title}\nURL: {url}")
