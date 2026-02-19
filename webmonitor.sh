@@ -25,8 +25,7 @@ manage_list() {
         echo "1) View All"; echo "2) Add $name"; echo "3) Remove $name"; echo "4) Back"
         read -p "Selection: " subopt
         case $subopt in
-            1) echo -e "\n${YELLOW}Current ${name}s:${NC}"
-               python3 -c "import json; d=json.load(open('$CONFIG')); items=sorted(d['$key']); [print(f' • {i}') for i in items] if items else print('Empty')" ;;
+            1) python3 -c "import json; d=json.load(open('$CONFIG')); items=sorted(d['$key']); [print(f' • {i}') for i in items] if items else print('Empty')" ;;
             2) read -p "Enter $name to add: " val
                python3 -c "import json; d=json.load(open('$CONFIG')); d['$key'].append('$val'); json.dump(d, open('$CONFIG', 'w'), indent=4)"
                python3 $HOME/webmonitor/monitor.py --alert "added_$key" "$val" & ;;
@@ -60,19 +59,25 @@ while true; do
             echo "1) Sender Email:    $(get_val sender_email)"
             echo "2) App Password:    ********"
             echo "3) Recipient Email: $(get_val recipient_email)"
-            echo "4) CC Mode:         $(get_val cc_email)"
+            cc_status=$(get_val cc_email)
+            echo "4) CC Mode:         ${cc_status:-OFF}"
             echo "0) Cancel"
             read -p "Change which? (1-4): " c_opt
             [[ "$c_opt" == "0" ]] && continue
-            read -p "Enter new value: " n_val
+            
+            if [[ "$c_opt" == "4" ]]; then
+                read -p "Would you like to CC all alerts to your sender email? (y/n): " n_val
+            else
+                read -p "Enter new value: " n_val
+            fi
+
             case $c_opt in
                 1) save_val "sender_email" "'$n_val'" ;;
                 2) save_val "app_password" "'$(echo $n_val | tr -d ' ')'" ;;
                 3) old_rec=$(get_val recipient_email)
                    save_val "recipient_email" "'$n_val'"
-                   # Now send the alert after the value is saved
                    python3 $HOME/webmonitor/monitor.py --alert "recipient_changed" "$n_val" "$old_rec" ;;
-                4) if [[ "$n_val" =~ ^[Yy]$ || "$n_val" == "true" ]]; then
+                4) if [[ "$n_val" =~ ^[Yy]$ ]]; then
                        save_val "cc_email" "'$(get_val sender_email)'"
                    else
                        save_val "cc_email" "''"
@@ -82,8 +87,14 @@ while true; do
         2) manage_list "trigger_words" "Trigger Word" ;;
         3) manage_list "whitelist" "Whitelisted Site" ;;
         4) manage_alerts ;;
-        5) pkill -f monitor.py; nohup python3 $HOME/webmonitor/monitor.py >> $HOME/.webmonitor/log.txt 2>&1 &
+        5) echo "Sending restart alert and recycling engine..."
+           python3 $HOME/webmonitor/monitor.py --alert "service_restarted" "Engine rebooting"
+           sleep 2 # Give the email time to send before the process dies
+           pkill -f monitor.py
+           nohup python3 $HOME/webmonitor/monitor.py >> $HOME/.webmonitor/log.txt 2>&1 &
            echo -e "${GREEN}✅ Engine Restarted.${NC}" ;;
-        6) pkill -f monitor.py; exit ;;
+        6) python3 $HOME/webmonitor/monitor.py --alert "service_stopped" "User manual stop"
+           sleep 2
+           pkill -f monitor.py; exit ;;
     esac
 done
