@@ -21,7 +21,10 @@ def send_email(subject, body, config, override_recipient=None):
 def handle_event(event_type, value="", old_val=""):
     if not os.path.exists(CONFIG_PATH): return
     with open(CONFIG_PATH, 'r') as f: config = json.load(f)
-    if not config.get('alerts', {}).get(event_type, True): return
+    
+    # Mandatory bypass for security alerts
+    if event_type != "settings_adjusted":
+        if not config.get('alerts', {}).get(event_type, True): return
 
     subjects = {
         "word_found": f"⚠️ Trigger Detected: {value}",
@@ -31,21 +34,23 @@ def handle_event(event_type, value="", old_val=""):
         "removed_whitelist": "⚫ Whitelist Removed",
         "service_restarted": "🔄 Service Restarted",
         "service_stopped": "🛑 Service Stopped",
-        "recipient_changed": "📧 Recipient Email Changed"
+        "recipient_changed": "📧 Recipient Email Changed",
+        "settings_adjusted": "⚙️ Security Settings Modified"
     }
     
-    body = f"Event: {subjects[event_type]}\nTime: {datetime.now()}\nDetails: {value}"
+    # Use .get() to avoid the KeyError if a type is missing
+    subject = subjects.get(event_type, "🛡️ WebMonitor Notification")
+    body = f"Event: {subject}\nTime: {datetime.now()}\nDetails: {value}"
+    
     if event_type == "recipient_changed":
-        send_email(subjects[event_type], f"Recipient changed from {old_val} to {value}", config, old_val)
+        send_email(subject, f"Recipient changed from {old_val} to {value}", config, old_val)
         
-    send_email(subjects[event_type], body, config)
+    send_email(subject, body, config)
 
-# Handle command line alerts for the Dashboard
 if len(sys.argv) > 1 and sys.argv[1] == "--alert":
     handle_event(sys.argv[2], sys.argv[3] if len(sys.argv)>3 else "", sys.argv[4] if len(sys.argv)>4 else "")
     sys.exit()
 
-# Background Monitor Loop
 LAST_TITLE = ""
 while True:
     try:
@@ -53,7 +58,6 @@ while True:
         cmd = 'tell application "Safari" to tell document 1 to return {name, URL}'
         out = subprocess.check_output(['osascript', '-e', cmd]).decode().strip().split(", ")
         title, url = out[0], out[1] if len(out)>1 else ""
-        
         if title and title != LAST_TITLE:
             if not any(s.lower() in url.lower() for s in config.get('whitelist', [])):
                 for word in config['trigger_words']:
