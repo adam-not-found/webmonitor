@@ -1,4 +1,4 @@
-import os, json, time, subprocess, smtplib, re, sys
+import os, json, time, subprocess, smtplib, re, sys, uuid
 from datetime import datetime
 from email.message import EmailMessage
 
@@ -14,9 +14,10 @@ def send_email(subject, body, config, target_email=None, alt_creds=None):
     
     if not recipient or "@" not in recipient: return False
     
+    unique_body = f"{body}\n\nReference ID: {uuid.uuid4().hex[:8]}"
     msg = EmailMessage()
-    msg.set_content(body)
-    msg['Subject'] = clean(subject)
+    msg.set_content(unique_body)
+    msg['Subject'] = f"{clean(subject)} [{datetime.now().strftime('%H:%M:%S')}]"
     msg['From'] = sender
     msg['To'] = recipient
     if config.get('cc_email') and not target_email: 
@@ -26,11 +27,9 @@ def send_email(subject, body, config, target_email=None, alt_creds=None):
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
             smtp.login(sender, password)
             smtp.send_message(msg)
-            print(f"\n✅ Email Sent: {subject}")
+            print(f"\n✅ Email Sent: {msg['Subject']}")
             return True
-    except Exception as e:
-        print(f"\n❌ SMTP Error: {e}")
-        return False
+    except: return False
 
 def handle_event(event_type, value="", old_val=""):
     if not os.path.exists(CONFIG_PATH): return
@@ -43,12 +42,16 @@ def handle_event(event_type, value="", old_val=""):
         "service_restarted": "🔄 WebMonitor Engine Restarted",
         "service_stopped": "🛑 WARNING: WebMonitor Service Stopped"
     }
-    
     subject = subjects.get(event_type, "🛡️ WebMonitor Notification")
-    body = f"Event: {subject}\nTime: {datetime.now()}\nDetails: {value}"
+    
+    if event_type == "word_found":
+        body = f"CONTENT DETECTED:\n{value}\n\nTime of Event: {datetime.now()}"
+    elif event_type == "recipient_changed":
+        body = f"OLD RECIPIENT: {old_val}\nNEW RECIPIENT: {value}\n\nTime: {datetime.now()}"
+    else:
+        body = f"DETAILS: {value}\n\nTime: {datetime.now()}"
     
     if event_type == "recipient_changed":
-        body = f"Recipient changed.\nOld: {old_val}\nNew: {value}"
         send_email(subject, body, config, target_email=old_val)
         send_email(subject, body, config, target_email=value)
     else:
@@ -57,7 +60,7 @@ def handle_event(event_type, value="", old_val=""):
 if len(sys.argv) > 1 and sys.argv[1] == "--test-creds":
     test_sender, test_pass, test_rec = sys.argv[2], sys.argv[3], sys.argv[4]
     with open(CONFIG_PATH, 'r') as f: cfg = json.load(f)
-    success = send_email("🛡️ WebMonitor: Connection Verified", "Credentials working.", cfg, target_email=test_rec, alt_creds=(test_sender, test_pass))
+    success = send_email("🛡️ WebMonitor: Connection Verified", "Credentials confirmed.", cfg, target_email=test_rec, alt_creds=(test_sender, test_pass))
     sys.exit(0 if success else 1)
 
 if len(sys.argv) > 1 and sys.argv[1] == "--alert":
@@ -79,8 +82,11 @@ while True:
             if not is_whitelisted:
                 for word in config.get('trigger_words', []):
                     if clean(word).lower() in title.lower():
+                        # --- INSTANT ALERTS FIRST ---
                         os.system('afplay /System/Library/Sounds/Glass.aiff')
                         os.system(f'osascript -e \'display notification "Trigger word detected: {word}" with title "🛡️ WebMonitor Alert"\'')
+                        
+                        # --- EMAIL HAPPENS AFTER ---
                         handle_event("word_found", f"Trigger Word: {word}\nPage Title: {title}\nURL: {url}")
                         break
     except: pass
