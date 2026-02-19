@@ -5,25 +5,21 @@ from email.message import EmailMessage
 CONFIG_PATH = os.path.expanduser("~/.webmonitor/config.json")
 
 def clean(text):
-    """Removes invisible newlines/spaces that cause SMTP errors."""
-    return str(text).strip() if text else ""
+    return str(text).strip().replace('\n', '').replace('\r', '') if text else ""
 
 def send_email(subject, body, config):
     recipient = clean(config.get('recipient_email'))
     sender = clean(config.get('sender_email'))
     password = clean(config.get('app_password'))
     
-    if not recipient or "@" not in recipient:
-        print("❌ Error: Valid recipient email missing.")
-        return
+    if not recipient or "@" not in recipient: return
     
     msg = EmailMessage()
     msg.set_content(body)
     msg['Subject'] = clean(subject)
     msg['From'] = sender
     msg['To'] = recipient
-    if config.get('cc_email'): 
-        msg['Cc'] = clean(config['cc_email'])
+    if config.get('cc_email'): msg['Cc'] = clean(config['cc_email'])
     
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
@@ -38,16 +34,16 @@ def handle_event(event_type, value=""):
     if event_type not in ["settings_adjusted", "service_restarted"]:
         if not config.get('alerts', {}).get(event_type, True): return
     
-    subjects = {"word_found": f"⚠️ Trigger: {value[:30]}", "service_restarted": "🔄 Service Restarted"}
-    subject = subjects.get(event_type, "🛡️ WebMonitor Alert")
+    subject = f"🛡️ WebMonitor: {event_type.replace('_', ' ').title()}"
     send_email(subject, f"Time: {datetime.now()}\nDetails: {value}", config)
 
 if len(sys.argv) > 1 and sys.argv[1] == "--alert":
     handle_event(sys.argv[2], sys.argv[3] if len(sys.argv)>3 else "")
     sys.exit()
 
-print("🚀 Engine Started. Watching Safari... (Ctrl+C to stop)")
+print("🚀 Engine Started. Watching Safari...")
 LAST_TITLE = ""
+
 while True:
     try:
         with open(CONFIG_PATH, 'r') as f: config = json.load(f)
@@ -56,8 +52,11 @@ while True:
         if len(out) < 2: continue
         title, url = out[0], out[1]
         
+        # Only process if the title has actually changed
         if title != LAST_TITLE:
             print(f"👀 Scanning: {title[:50]}...")
+            LAST_TITLE = title # Update immediately to prevent repeat loops
+            
             is_whitelisted = any(clean(s).lower() in url.lower() for s in config.get('whitelist', []))
             
             if not is_whitelisted:
@@ -68,7 +67,6 @@ while True:
                         os.system('afplay /System/Library/Sounds/Glass.aiff')
                         handle_event("word_found", f"Word: {clean_word}\nURL: {url}")
                         break
-            LAST_TITLE = title
     except Exception as e:
-        print(f"⚠️ Loop Error: {e}")
-    time.sleep(2)
+        print(f"⚠️ Error: {e}")
+    time.sleep(3)
