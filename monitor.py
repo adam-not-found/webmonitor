@@ -1,4 +1,4 @@
-import os, json, time, subprocess, smtplib, re, sys, uuid
+import os, json, time, subprocess, smtplib, re, sys
 from datetime import datetime
 from email.message import EmailMessage
 
@@ -13,9 +13,8 @@ def send_email(subject, body, config, target_email=None, alt_creds=None):
     recipient = clean(target_email) if target_email else clean(config.get('recipient_email'))
     if not recipient or "@" not in recipient: return False
     
-    unique_body = f"{body}\n\nReference ID: {uuid.uuid4().hex[:8]}"
     msg = EmailMessage()
-    msg.set_content(unique_body)
+    msg.set_content(body)
     msg['Subject'] = f"{clean(subject)} [{datetime.now().strftime('%H:%M:%S')}]"
     msg['From'] = sender
     msg['To'] = recipient
@@ -55,7 +54,7 @@ def handle_event(event_type, value="", old_val=""):
     elif event_type == "service_restarted":
         body = f"The WebMonitor engine was manually restarted on {now_str}. All monitoring is now active with the latest settings."
     else:
-        body = f"A setting was adjusted on {now_str}.\n\nDescription: {value}"
+        body = f"A setting was adjusted on {now_str}.\n\n{value}"
     
     if event_type == "recipient_changed":
         send_email(raw_sub, body, config, target_email=old_val)
@@ -70,7 +69,7 @@ if len(sys.argv) > 1 and sys.argv[1] == "--test-creds":
     sys.exit(0 if success else 1)
 
 if len(sys.argv) > 1 and sys.argv[1] == "--alert":
-    handle_event(sys.argv[2], sys.argv[3] if len(sys.argv)>3 else "", sys.argv[4] if len(sys.argv)>4 else "")
+    handle_event(sys.argv[2], sys.argv[3] if len(sys.argv)>4 else "", sys.argv[4] if len(sys.argv)>4 else "")
     sys.exit()
 
 LAST_TITLE = ""

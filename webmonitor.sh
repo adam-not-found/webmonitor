@@ -2,7 +2,7 @@
 BLUE='\033[0;34m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 CONFIG="$HOME/.webmonitor/config.json"
 
-get_val() { python3 -c "import json,os; print(json.load(open('$CONFIG'))['$1'])" 2>/dev/null; }
+get_val() { python3 -c "import json; print(json.load(open('$CONFIG'))['$1'])" 2>/dev/null; }
 save_val() { python3 -c "import json; d=json.load(open('$CONFIG')); d['$1']=$2; json.dump(d, open('$CONFIG', 'w'), indent=4)" ; }
 
 manage_list() {
@@ -18,12 +18,12 @@ manage_list() {
         case $subopt in
             [Aa]*) read -p "Enter $name: " val
                python3 -c "import json; d=json.load(open('$CONFIG')); d['$key'].append('$val'); json.dump(d, open('$CONFIG', 'w'), indent=4)"
-               python3 monitor.py --alert "settings_adjusted" "Added '$val' to the $name list." ;;
+               python3 monitor.py --alert "settings_adjusted" "You added '$val' to your $name list. The monitor will now respect this change." ;;
             [Rr]*) read -p "Enter number to remove: " num
                idx=$((num-1)); item_to_rm=${items[$idx]}
                if [[ -n "$item_to_rm" ]]; then
                    python3 -c "import json; d=json.load(open('$CONFIG')); d['$key'].remove('$item_to_rm'); json.dump(d, open('$CONFIG', 'w'), indent=4)"
-                   python3 monitor.py --alert "settings_adjusted" "Removed '$item_to_rm' from the $name list."
+                   python3 monitor.py --alert "settings_adjusted" "You removed '$item_to_rm' from your $name list. The monitor will no longer use this for filtering."
                fi ;;
             0) break ;;
         esac
@@ -65,8 +65,8 @@ while true; do
                    new_cc=""; [[ "$confirm" =~ ^[Yy]$ ]] && new_cc="$(get_val sender_email)"
                    if [[ "$new_cc" != "$cc_val" ]]; then
                        save_val "cc_email" "'$new_cc'"
-                       msg="Enabled CC mode (Sender will receive copies of all alerts)."
-                       [[ -z "$new_cc" ]] && msg="Disabled CC mode (Sender will no longer receive copies)."
+                       msg="You enabled CC mode. The sender account will now receive a copy of every alert sent to the recipient."
+                       [[ -z "$new_cc" ]] && msg="You disabled CC mode. The sender account will no longer receive copies of alerts."
                        python3 monitor.py --alert "settings_adjusted" "$msg"
                    fi ;;
                 0) break ;;
@@ -85,8 +85,8 @@ while true; do
             [[ "$t_opt" == "0" ]] && break
             key=$(python3 -c "import json; d=json.load(open('$CONFIG')); keys=[k for k in d['alerts'].keys() if k != 'settings_adjusted']; print(keys[$t_opt-1])")
             python3 -c "import json; d=json.load(open('$CONFIG')); d['alerts']['$key']=not d['alerts']['$key']; json.dump(d, open('$CONFIG', 'w'), indent=4)"
-            status=$(get_val alerts | python3 -c "import sys, json; print('enabled' if json.load(sys.stdin)['$key'] else 'disabled')")
-            python3 monitor.py --alert "settings_adjusted" "The alert for '$key' was $status. You will now be notified accordingly."
+            status=$(python3 -c "import json; d=json.load(open('$CONFIG')); print('enabled' if d['alerts']['$key'] else 'disabled')")
+            python3 monitor.py --alert "settings_adjusted" "You adjusted your notification settings. The alert for '$key' has been $status."
            done ;;
         4) python3 monitor.py --alert "service_restarted"; pkill -f monitor.py; nohup python3 monitor.py >> $HOME/.webmonitor/log.txt 2>&1 &
            echo -e "${GREEN}✅ Engine Restarted.${NC}" ;;
