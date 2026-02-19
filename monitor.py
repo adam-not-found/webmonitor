@@ -32,29 +32,39 @@ def send_email(subject, body, config, target_email=None, alt_creds=None):
 def handle_event(event_type, value="", old_val=""):
     if not os.path.exists(CONFIG_PATH): return
     with open(CONFIG_PATH, 'r') as f: config = json.load(f)
+    
+    # Check if this specific alert is toggled ON (except mandatory ones)
+    mandatory = ["settings_adjusted", "recipient_changed", "service_restarted", "service_stopped"]
+    if event_type not in mandatory:
+        if not config.get('alerts', {}).get(event_type, True): return
+
     subjects = {
-        "word_found": "🚨 SECURITY ALERT: Restricted Content Detected",
+        "word_found": f"🚨 TRIGGER DETECTED: {value.splitlines()[0].split(': ')[1] if 'word_found' == event_type else ''}",
         "recipient_changed": "📧 ATTENTION: Alert Recipient Modified",
         "settings_adjusted": "⚙️ WebMonitor Configuration Changed",
         "service_restarted": "🔄 WebMonitor Engine Restarted",
         "service_stopped": "🛑 WARNING: WebMonitor Service Stopped"
     }
-    subject = subjects.get(event_type, "🛡️ WebMonitor Notification")
+    
+    raw_sub = subjects.get(event_type, "🛡️ WebMonitor Notification")
+    
     if event_type == "word_found":
-        body = f"CONTENT DETECTED:\n{value}\n\nTime of Event: {datetime.now()}"
+        body = f"An automated scan has detected a restricted keyword.\n\n{value}\n\nTime of Event: {datetime.now()}"
+    elif event_type == "recipient_changed":
+        body = f"The primary alert recipient has been updated.\nMessages will no longer be sent to the old address.\n\nOLD RECIPIENT: {old_val}\nNEW RECIPIENT: {value}\n\nTime: {datetime.now()}"
     else:
-        body = f"DETAILS: {value}\n\nTime: {datetime.now()}"
+        body = f"Configuration Update Details:\n{value}\n\nTime: {datetime.now()}"
     
     if event_type == "recipient_changed":
-        send_email(subject, body, config, target_email=old_val)
-        send_email(subject, body, config, target_email=value)
+        send_email(raw_sub, body, config, target_email=old_val)
+        send_email(raw_sub, body, config, target_email=value)
     else:
-        send_email(subject, body, config)
+        send_email(raw_sub, body, config)
 
 if len(sys.argv) > 1 and sys.argv[1] == "--test-creds":
     test_sender, test_pass, test_rec = sys.argv[2], sys.argv[3], sys.argv[4]
     with open(CONFIG_PATH, 'r') as f: cfg = json.load(f)
-    success = send_email("🛡️ WebMonitor: Connection Verified", "Credentials confirmed.", cfg, target_email=test_rec, alt_creds=(test_sender, test_pass))
+    success = send_email("🛡️ Connection Verified", "Credentials confirmed.", cfg, target_email=test_rec, alt_creds=(test_sender, test_pass))
     sys.exit(0 if success else 1)
 
 if len(sys.argv) > 1 and sys.argv[1] == "--alert":
@@ -75,11 +85,10 @@ while True:
             is_whitelisted = any(clean(s).lower() in url.lower() for s in config.get('whitelist', []))
             if not is_whitelisted:
                 for word in config.get('trigger_words', []):
-                    if clean(word).lower() in title.lower():
-                        # UNIFIED NOTIFICATION AND SOUND
+                    clean_w = clean(word).lower()
+                    # REGEX: \b ensures "test" matches "test" but not "testify"
+                    if re.search(r'\b' + re.escape(clean_w) + r'\b', title.lower()):
                         os.system(f'osascript -e \'display notification "Trigger word detected: {word}" with title "🛡️ WebMonitor Alert" sound name "Glass"\'')
-                        
-                        # BACKGROUND EMAIL
                         handle_event("word_found", f"Trigger Word: {word}\nPage Title: {title}\nURL: {url}")
                         break
     except: pass
