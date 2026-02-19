@@ -11,19 +11,26 @@ def send_email(subject, body, config, override_recipient=None):
     msg['Subject'] = subject
     msg['From'] = config['sender_email']
     msg['To'] = recipient
-    if config.get('cc_email') and not override_recipient: msg['Cc'] = config['cc_email']
+    if config.get('cc_email') and not override_recipient:
+        msg['Cc'] = config['cc_email']
+        
     try:
+        # Using port 465 (SSL) which is generally more stable for Gmail App Passwords
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
             smtp.login(config['sender_email'], config['app_password'])
             smtp.send_message(msg)
-    except: pass
+    except Exception as e:
+        # This will write errors to your log file (~/.webmonitor/log.txt)
+        print(f"[{datetime.now()}] Email Error: {e}")
 
 def handle_event(event_type, value="", old_val=""):
     if not os.path.exists(CONFIG_PATH): return
-    with open(CONFIG_PATH, 'r') as f: config = json.load(f)
+    with open(CONFIG_PATH, 'r') as f:
+        config = json.load(f)
     
-    # Mandatory bypass for security alerts
-    if event_type != "settings_adjusted":
+    # Mandatory bypass: Security alerts send regardless of toggles
+    is_security = event_type in ["settings_adjusted", "recipient_changed"]
+    if not is_security:
         if not config.get('alerts', {}).get(event_type, True): return
 
     subjects = {
@@ -38,9 +45,8 @@ def handle_event(event_type, value="", old_val=""):
         "settings_adjusted": "⚙️ Security Settings Modified"
     }
     
-    # Use .get() to avoid the KeyError if a type is missing
     subject = subjects.get(event_type, "🛡️ WebMonitor Notification")
-    body = f"Event: {subject}\nTime: {datetime.now()}\nDetails: {value}"
+    body = f"Alert: {subject}\nTime: {datetime.now()}\nDetails: {value}"
     
     if event_type == "recipient_changed":
         send_email(subject, f"Recipient changed from {old_val} to {value}", config, old_val)
