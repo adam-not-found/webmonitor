@@ -71,17 +71,15 @@ while True:
         title, url = out[0], out[1]
         
         if title != LAST_TITLE:
-            # INSTANT LOCK: Prevent double-firing by updating state immediately
             LAST_TITLE = title
-            
             is_whitelisted = any(clean(s).lower() in url.lower() for s in config.get('whitelist', []))
             if not is_whitelisted:
                 for word in config.get('trigger_words', []):
                     if clean(word).lower() in title.lower():
-                        # FIRE LOCAL ALERTS SIMULTANEOUSLY
-                        os.system(f'afplay /System/Library/Sounds/Glass.aiff & osascript -e \'display notification "Trigger word detected: {word}" with title "🛡️ WebMonitor Alert"\'')
+                        # UNIFIED NOTIFICATION AND SOUND
+                        os.system(f'osascript -e \'display notification "Trigger word detected: {word}" with title "🛡️ WebMonitor Alert" sound name "Glass"\'')
                         
-                        # SEND EMAIL IN BACKGROUND
+                        # BACKGROUND EMAIL
                         handle_event("word_found", f"Trigger Word: {word}\nPage Title: {title}\nURL: {url}")
                         break
     except: pass
