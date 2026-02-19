@@ -50,11 +50,12 @@ def handle_event(event_type, value="", old_val=""):
     if event_type == "word_found":
         body = f"An automated scan detected a restricted keyword on {now_str}.\n\n{value}"
     elif event_type == "recipient_changed":
-        body = f"The primary alert recipient was updated on {now_str}.\n\nOLD RECIPIENT: {old_val}\nNEW RECIPIENT: {value}\n\nNotifications will now be sent to the new address."
+        body = f"The primary alert recipient was updated on {now_str}.\n\nOLD RECIPIENT: {old_val}\nNEW RECIPIENT: {value}\n\nThis means future alerts will no longer be sent to the old address and will now be directed to the new one."
     elif event_type == "service_restarted":
-        body = f"The WebMonitor engine was manually restarted on {now_str}. All monitoring is now active with the latest settings."
+        body = f"The WebMonitor engine was manually restarted on {now_str}. Monitoring has resumed with any newly saved settings."
     else:
-        body = f"A setting was adjusted on {now_str}.\n\n{value}"
+        # Improved setting description for clarity
+        body = f"A manual configuration update occurred on {now_str}.\n\nChange Details: {value}"
     
     if event_type == "recipient_changed":
         send_email(raw_sub, body, config, target_email=old_val)
@@ -69,7 +70,7 @@ if len(sys.argv) > 1 and sys.argv[1] == "--test-creds":
     sys.exit(0 if success else 1)
 
 if len(sys.argv) > 1 and sys.argv[1] == "--alert":
-    handle_event(sys.argv[2], sys.argv[3] if len(sys.argv)>4 else "", sys.argv[4] if len(sys.argv)>4 else "")
+    handle_event(sys.argv[2], sys.argv[3] if len(sys.argv)>3 else "", sys.argv[4] if len(sys.argv)>4 else "")
     sys.exit()
 
 LAST_TITLE = ""
