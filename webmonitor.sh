@@ -5,7 +5,6 @@ CONFIG="$HOME/.webmonitor/config.json"
 get_val() { python3 -c "import json; print(json.load(open('$CONFIG'))['$1'])" 2>/dev/null; }
 save_val() { python3 -c "import json; d=json.load(open('$CONFIG')); d['$1']=$2; json.dump(d, open('$CONFIG', 'w'), indent=4)" ; }
 
-# --- FULL DASHBOARD ---
 manage_list() {
     local key=$1; local name=$2
     while true; do
@@ -71,12 +70,13 @@ while true; do
             read -p "Toggle (0 to back): " t_opt
             [[ "$t_opt" == "0" ]] && break
             key=$(python3 -c "import json; d=json.load(open('$CONFIG')); keys=[k for k in d['alerts'].keys() if k != 'settings_adjusted']; print(keys[$t_opt-1])")
-            python3 -c "import json; d=json.load(open('$CONFIG')); d['alerts']['$key']=not d['alerts']['$key']; val=d['alerts']['$key']; json.dump(d, open('$CONFIG', 'w'), indent=4); print(f'SETTING:{key}:{val}')" > .tmp_toggle
-            t_info=$(cat .tmp_toggle | grep "SETTING:")
-            python3 monitor.py --alert "settings_adjusted" "Alert toggle changed: ${t_info#SETTING:}"
-            rm .tmp_toggle
+            # Fixed the Python logic below to correctly handle the 'key' variable
+            status=$(python3 -c "import json; d=json.load(open('$CONFIG')); d['alerts']['$key']=not d['alerts']['$key']; json.dump(d, open('$CONFIG', 'w'), indent=4); print('ON' if d['alerts']['$key'] else 'OFF')")
+            python3 monitor.py --alert "settings_adjusted" "Alert toggle '$key' changed to: $status"
            done ;;
         4) pkill -f monitor.py; nohup python3 monitor.py >> "$HOME/.webmonitor/log.txt" 2>&1 &
+           # Wait a second to let process start before sending alert
+           sleep 1
            python3 monitor.py --alert "service_restarted"
            echo -e "${GREEN}✅ Engine Restarted.${NC}" ;;
         5) cd ~ && rm -rf "$HOME/.webmonitor" && exit ;;
