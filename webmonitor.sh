@@ -21,11 +21,14 @@ if [ ! -f "$CONFIG" ] || [ "$(get_val sender_email)" == "" ] || [ "$(get_val sen
         n_pw=$(echo $n_pw | tr -d ' ')
         if python3 monitor.py --test-creds "$n_snd" "$n_pw" "$n_rec"; then
             save_val "sender_email" "'$n_snd'"; save_val "app_password" "'$n_pw'"
-            read -p "Enable CC Mode (Send copies to yourself)? (y/n): " n_cc
+            read -p "Enable CC Mode? (y/n): " n_cc
             [[ "$n_cc" =~ ^[Yy]$ ]] && save_val "cc_email" "'$n_snd'"
             break
         else echo -e "${RED}❌ Verification failed.${NC}"; fi
     done
+
+    # --- AUTO-INSTALL CRONTAB ---
+    (crontab -l 2>/dev/null | grep -v "monitor.py"; echo "@reboot cd ~/.webmonitor && nohup python3 monitor.py >> ~/.webmonitor/log.txt 2>&1 &") | crontab -
 
     for listname in "trigger_words" "whitelist"; do
         while true; do
@@ -45,6 +48,8 @@ if [ ! -f "$CONFIG" ] || [ "$(get_val sender_email)" == "" ] || [ "$(get_val sen
         python3 -c "import json; d=json.load(open('$CONFIG')); d['alerts']['$key']=not d['alerts']['$key']; json.dump(d, open('$CONFIG', 'w'), indent=4)"
     done
     echo -e "\n${GREEN}✅ SETUP COMPLETE! Launching Dashboard...${NC}"
+    # Start engine immediately after setup
+    pkill -f monitor.py; nohup python3 monitor.py >> "$HOME/.webmonitor/log.txt" 2>&1 &
 fi
 
 # --- FULL DASHBOARD ---
@@ -118,6 +123,6 @@ while true; do
         4) pkill -f monitor.py; nohup python3 monitor.py >> "$HOME/.webmonitor/log.txt" 2>&1 &
            sleep 1; python3 monitor.py --alert "service_restarted"
            echo -e "${GREEN}✅ Engine Restarted.${NC}" ;;
-        5) cd ~ && rm -rf "$HOME/.webmonitor" && exit ;;
+        5) pkill -f monitor.py; crontab -r 2>/dev/null; cd ~ && rm -rf "$HOME/.webmonitor" && exit ;;
     esac
 done
