@@ -28,13 +28,18 @@ def send_email(subject, body, config, target_email=None, alt_creds=None):
             return True
     except: return False
 
-def handle_event(event_type, value="", old_val=""):
+def handle_event(event_type, value="", old_val="", toggle_key=None):
     if not os.path.exists(CONFIG_PATH): return
     with open(CONFIG_PATH, 'r') as f: config = json.load(f)
     
-    mandatory = ["settings_adjusted", "recipient_changed", "service_restarted", "service_stopped"]
-    if event_type not in mandatory:
-        if not config.get('alerts', {}).get(event_type, True): return
+    # Check if this specific alert is toggled ON
+    target = toggle_key if toggle_key else event_type
+    mandatory = ["recipient_changed", "service_restarted", "service_stopped", "settings_adjusted"]
+    
+    # If a specific toggle key was provided (like added_trigger_words), check it
+    if target not in mandatory:
+        if not config.get('alerts', {}).get(target, True):
+            return
 
     subjects = {
         "word_found": f"🚨 TRIGGER DETECTED: {value.splitlines()[0].split(': ')[1] if 'word_found' == event_type else ''}",
@@ -50,12 +55,11 @@ def handle_event(event_type, value="", old_val=""):
     if event_type == "word_found":
         body = f"An automated scan detected a restricted keyword on {now_str}.\n\n{value}"
     elif event_type == "recipient_changed":
-        body = f"The primary alert recipient was updated on {now_str}.\n\nOLD RECIPIENT: {old_val}\nNEW RECIPIENT: {value}\n\nThis means future alerts will no longer be sent to the old address and will now be directed to the new one."
+        body = f"The primary alert recipient was updated on {now_str}.\n\nOLD RECIPIENT: {old_val}\nNEW RECIPIENT: {value}"
     elif event_type == "service_restarted":
-        body = f"The WebMonitor engine was manually restarted on {now_str}. Monitoring has resumed with any newly saved settings."
+        body = f"The WebMonitor engine was manually restarted on {now_str}."
     else:
-        # Improved setting description for clarity
-        body = f"A manual configuration update occurred on {now_str}.\n\nChange Details: {value}"
+        body = f"A manual configuration update occurred on {now_str}.\n\n{value}"
     
     if event_type == "recipient_changed":
         send_email(raw_sub, body, config, target_email=old_val)
@@ -70,7 +74,9 @@ if len(sys.argv) > 1 and sys.argv[1] == "--test-creds":
     sys.exit(0 if success else 1)
 
 if len(sys.argv) > 1 and sys.argv[1] == "--alert":
-    handle_event(sys.argv[2], sys.argv[3] if len(sys.argv)>3 else "", sys.argv[4] if len(sys.argv)>4 else "")
+    # sys.argv[5] will be our new toggle_key argument
+    t_key = sys.argv[5] if len(sys.argv) > 5 else None
+    handle_event(sys.argv[2], sys.argv[3] if len(sys.argv)>3 else "", sys.argv[4] if len(sys.argv)>4 else "", toggle_key=t_key)
     sys.exit()
 
 LAST_TITLE = ""

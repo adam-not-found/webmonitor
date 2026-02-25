@@ -10,20 +10,20 @@ manage_list() {
     while true; do
         echo -e "\n${BLUE}--- MANAGE $name ---${NC}"
         items=($(python3 -c "import json; d=json.load(open('$CONFIG')); print(' '.join(sorted(d['$key'])))"))
-        if [ ${#items[@]} -eq 0 ]; then echo "List is currently empty."; else
-            for i in "${!items[@]}"; do echo "$((i+1))) ${items[$i]}"; done
-        fi
+        for i in "${!items[@]}"; do echo "$((i+1))) ${items[$i]}"; done
         echo -e "\nA) Add $name  R) Remove $name  0) Back"
         read -p "Selection: " subopt
         case $subopt in
             [Aa]*) read -p "Enter $name: " val
                python3 -c "import json; d=json.load(open('$CONFIG')); d['$key'].append('$val'); json.dump(d, open('$CONFIG', 'w'), indent=4)"
-               python3 monitor.py --alert "settings_adjusted" "You added '$val' to your $name list. The monitor will now respect this change." ;;
+               # Pass the toggle key as the 5th argument
+               python3 monitor.py --alert "settings_adjusted" "You added '$val' to the $name list. The monitor will now respect this change." "" "added_$key" ;;
             [Rr]*) read -p "Enter number to remove: " num
                idx=$((num-1)); item_to_rm=${items[$idx]}
                if [[ -n "$item_to_rm" ]]; then
                    python3 -c "import json; d=json.load(open('$CONFIG')); d['$key'].remove('$item_to_rm'); json.dump(d, open('$CONFIG', 'w'), indent=4)"
-                   python3 monitor.py --alert "settings_adjusted" "You removed '$item_to_rm' from your $name list. The monitor will no longer use this for filtering."
+                   # Pass the toggle key as the 5th argument
+                   python3 monitor.py --alert "settings_adjusted" "You removed '$item_to_rm' from the $name list." "" "removed_$key"
                fi ;;
             0) break ;;
         esac
@@ -41,7 +41,7 @@ while true; do
 
     case $opt in
         1) while true; do
-            cc_val=$(get_val cc_email); cc_status="OFF"; [[ -n "$cc_val" ]] && cc_status="ON"
+            cc_status="OFF"; [[ -n "$(get_val cc_email)" ]] && cc_status="ON"
             echo -e "\n${YELLOW}--- EMAIL SETTINGS ---${NC}"
             echo "1) Sender:    $(get_val sender_email)"
             echo "2) Recipient: $(get_val recipient_email)"
@@ -49,24 +49,22 @@ while true; do
             echo "0) Back"
             read -p "Change which? " e_opt
             case $e_opt in
-                1) echo -e "\n${BLUE}How to get an App Password:${NC}\n1. Go to Google Account > Security\n2. Enable 2-Step Verification\n3. Search 'App Passwords' at the top\n4. Create one named 'WebMonitor'\n"
+                1) echo -e "\n${BLUE}How to get an App Password:${NC}\n1. Google Account > Security > 2-Step Verification > App Passwords\n"
                    read -p "New Sender Gmail: " n_em; read -p "New App Password: " n_pw
                    n_pw=$(echo $n_pw | tr -d ' ')
-                   echo "Verifying..."
                    if python3 monitor.py --test-creds "$n_em" "$n_pw" "$(get_val recipient_email)"; then
                        save_val "sender_email" "'$n_em'"; save_val "app_password" "'$n_pw'"
-                   else echo -e "${RED}❌ Verification failed. Check your App Password and try again.${NC}"; fi ;;
+                   else echo -e "${RED}❌ Verification failed.${NC}"; fi ;;
                 2) old_r=$(get_val recipient_email); read -p "New Recipient: " n_r
                    if [[ "$n_r" != "$old_r" ]]; then
                        save_val "recipient_email" "'$n_r'"
                        python3 monitor.py --alert "recipient_changed" "$n_r" "$old_r"
                    fi ;;
-                3) read -p "Should sender be CC'd on all alerts? (y/n): " confirm
+                3) read -p "Should sender be CC'd? (y/n): " confirm
                    new_cc=""; [[ "$confirm" =~ ^[Yy]$ ]] && new_cc="$(get_val sender_email)"
-                   if [[ "$new_cc" != "$cc_val" ]]; then
+                   if [[ "$new_cc" != "$(get_val cc_email)" ]]; then
                        save_val "cc_email" "'$new_cc'"
-                       msg="You enabled CC mode. The sender account will now receive a copy of every alert sent to the recipient."
-                       [[ -z "$new_cc" ]] && msg="You disabled CC mode. The sender account will no longer receive copies of alerts."
+                       msg="CC Mode changed to $confirm."
                        python3 monitor.py --alert "settings_adjusted" "$msg"
                    fi ;;
                 0) break ;;
@@ -81,12 +79,12 @@ while true; do
            done ;;
         3) while true; do
             python3 -c "import json; d=json.load(open('$CONFIG')); [print(f'{i+1}) [{\"ON\" if v else \"OFF\"}] {k}') for i, (k, v) in enumerate(d['alerts'].items()) if k != 'settings_adjusted']"
-            read -p "Toggle which (0 to back): " t_opt
+            read -p "Toggle (0 to back): " t_opt
             [[ "$t_opt" == "0" ]] && break
             key=$(python3 -c "import json; d=json.load(open('$CONFIG')); keys=[k for k in d['alerts'].keys() if k != 'settings_adjusted']; print(keys[$t_opt-1])")
             python3 -c "import json; d=json.load(open('$CONFIG')); d['alerts']['$key']=not d['alerts']['$key']; json.dump(d, open('$CONFIG', 'w'), indent=4)"
             status=$(python3 -c "import json; d=json.load(open('$CONFIG')); print('enabled' if d['alerts']['$key'] else 'disabled')")
-            python3 monitor.py --alert "settings_adjusted" "You adjusted your notification settings. The alert for '$key' has been $status."
+            python3 monitor.py --alert "settings_adjusted" "Alert for '$key' is now $status."
            done ;;
         4) python3 monitor.py --alert "service_restarted"; pkill -f monitor.py; nohup python3 monitor.py >> $HOME/.webmonitor/log.txt 2>&1 &
            echo -e "${GREEN}✅ Engine Restarted.${NC}" ;;
