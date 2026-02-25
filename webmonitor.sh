@@ -127,9 +127,11 @@ while true; do
                    pkill -f monitor.py 2>/dev/null
                    echo -e "${YELLOW}Clearing Crontab...${NC}"
                    crontab -r 2>/dev/null
-                   echo -e "${YELLOW}Deleting hidden directory ~/.webmonitor ...${NC}"
-                   (cd ~ && rm -rf "$HOME/.webmonitor")
-                   echo -e "${GREEN}✅ Uninstall complete.${NC}"
+                   echo -e "${YELLOW}Deleting hidden directory and moving to Home...${NC}"
+                   # The magic part: move to ~ before deleting the current folder
+                   cd ~
+                   rm -rf "$HOME/.webmonitor"
+                   echo -e "${GREEN}✅ Uninstall complete. You are now in your home directory.${NC}"
                    exit
                fi
            fi ;;
