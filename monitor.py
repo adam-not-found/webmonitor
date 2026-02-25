@@ -1,102 +1,92 @@
-import os, json, time, subprocess, smtplib, re, sys
+import os, json, smtplib, sys, subprocess, time, urllib.request
 from datetime import datetime
 from email.message import EmailMessage
 
 CONFIG_PATH = os.path.expanduser("~/.webmonitor/config.json")
 
-def clean(text):
-    return str(text).strip().replace('\n', '').replace('\r', '') if text else ""
+def load_config():
+    with open(CONFIG_PATH, 'r') as f:
+        return json.load(f)
 
-def send_email(subject, body, config, target_email=None, alt_creds=None):
-    sender = clean(alt_creds[0] if alt_creds else config.get('sender_email'))
-    password = clean(alt_creds[1] if alt_creds else config.get('app_password'))
-    recipient = clean(target_email) if target_email else clean(config.get('recipient_email'))
-    if not recipient or "@" not in recipient: return False
+def ensure_ollama():
+    """Checks if Ollama is running; if not, starts the background service."""
+    try:
+        # Check if service is responsive
+        urllib.request.urlopen("http://localhost:11434/api/tags", timeout=1)
+    except:
+        # Path to the internal binary to avoid needing the GUI app open
+        binary_path = "/Applications/Ollama.app/Contents/Resources/ollama"
+        if os.path.exists(binary_path):
+            subprocess.Popen([binary_path, "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            time.sleep(5) # Give it a moment to wake up
+
+def get_ai_analysis(word, context):
+    """Asks local AI to analyze the risk level of a trigger word hit."""
+    ensure_ollama()
+    url = "http://localhost:11434/api/generate"
+    prompt = f"Analyze this web activity. Trigger: '{word}'. Context: '{context}'. Is this a security/safety risk? 1-sentence assessment."
     
+    data = json.dumps({
+        "model": "llama3.2:3b",
+        "prompt": prompt,
+        "stream": False
+    }).encode('utf-8')
+
+    try:
+        req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
+        with urllib.request.urlopen(req, timeout=15) as response:
+            res = json.loads(response.read().decode('utf-8'))
+            return res.get('response', 'Analysis complete.')
+    except Exception as e:
+        return f"AI Analysis currently offline: {e}"
+
+def send_email(subject, body):
+    conf = load_config()
     msg = EmailMessage()
     msg.set_content(body)
-    msg['Subject'] = f"{clean(subject)} [{datetime.now().strftime('%H:%M:%S')}]"
-    msg['From'] = sender
-    msg['To'] = recipient
-    if config.get('cc_email') and not target_email: msg['Cc'] = clean(config['cc_email'])
-    
+    msg['Subject'] = f"{subject} [{datetime.now().strftime('%H:%M:%S')}]"
+    msg['From'] = conf['sender_email']
+    msg['To'] = conf['recipient_email']
+    if conf.get('cc_email'):
+        msg['Cc'] = conf['cc_email']
+
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-            smtp.login(sender, password)
+            smtp.login(conf['sender_email'], conf['app_password'])
             smtp.send_message(msg)
-            print(f"\n✅ Email Sent: {msg['Subject']}")
-            return True
-    except: return False
+    except Exception as e:
+        with open(os.path.expanduser("~/.webmonitor/log.txt"), "a") as f:
+            f.write(f"Email Error: {e}\n")
 
-def handle_event(event_type, value="", old_val="", toggle_key=None):
-    if not os.path.exists(CONFIG_PATH): return
-    with open(CONFIG_PATH, 'r') as f: config = json.load(f)
-    
-    # Check if this specific alert is toggled ON
-    target = toggle_key if toggle_key else event_type
-    mandatory = ["recipient_changed", "service_restarted", "service_stopped", "settings_adjusted"]
-    
-    # If a specific toggle key was provided (like added_trigger_words), check it
-    if target not in mandatory:
-        if not config.get('alerts', {}).get(target, True):
-            return
+def handle_event(event_type, value="", detail="", toggle_key=None):
+    conf = load_config()
+    t_key = toggle_key or event_type
+    if not conf.get('alerts', {}).get(t_key, True):
+        return
 
     subjects = {
-        "word_found": f"🚨 TRIGGER DETECTED: {value.splitlines()[0].split(': ')[1] if 'word_found' == event_type else ''}",
-        "recipient_changed": "📧 ATTENTION: Alert Recipient Modified",
-        "settings_adjusted": "⚙️ WebMonitor Configuration Changed",
-        "service_restarted": "🔄 WebMonitor Engine Restarted",
-        "service_stopped": "🛑 WARNING: WebMonitor Service Stopped"
+        "word_found": f"🚨 TRIGGER DETECTED: {value}",
+        "settings_adjusted": "⚙️ Configuration Changed",
+        "service_restarted": "🔄 Engine Restarted",
+        "service_stopped": "🛑 Service Stopped",
+        "recipient_changed": "📧 Recipient Updated"
     }
-    
-    raw_sub = subjects.get(event_type, "🛡️ WebMonitor Notification")
-    now_str = datetime.now().strftime("%b %d at %I:%M%p")
+
+    content = f"Event: {event_type}\nDetail: {value}\nContext: {detail}"
 
     if event_type == "word_found":
-        body = f"An automated scan detected a restricted keyword on {now_str}.\n\n{value}"
-    elif event_type == "recipient_changed":
-        body = f"The primary alert recipient was updated on {now_str}.\n\nOLD RECIPIENT: {old_val}\nNEW RECIPIENT: {value}"
-    elif event_type == "service_restarted":
-        body = f"The WebMonitor engine was manually restarted on {now_str}."
-    else:
-        body = f"A manual configuration update occurred on {now_str}.\n\n{value}"
-    
-    if event_type == "recipient_changed":
-        send_email(raw_sub, body, config, target_email=old_val)
-        send_email(raw_sub, body, config, target_email=value)
-    else:
-        send_email(raw_sub, body, config)
+        analysis = get_ai_analysis(value, detail)
+        content += f"\n\n--- AI RISK ASSESSMENT ---\n{analysis}"
 
-if len(sys.argv) > 1 and sys.argv[1] == "--test-creds":
-    test_sender, test_pass, test_rec = sys.argv[2], sys.argv[3], sys.argv[4]
-    with open(CONFIG_PATH, 'r') as f: cfg = json.load(f)
-    success = send_email("🛡️ Connection Verified", "Credentials confirmed.", cfg, target_email=test_rec, alt_creds=(test_sender, test_pass))
-    sys.exit(0 if success else 1)
+    send_email(subjects.get(event_type, "WebMonitor Alert"), content)
 
-if len(sys.argv) > 1 and sys.argv[1] == "--alert":
-    # sys.argv[5] will be our new toggle_key argument
-    t_key = sys.argv[5] if len(sys.argv) > 5 else None
-    handle_event(sys.argv[2], sys.argv[3] if len(sys.argv)>3 else "", sys.argv[4] if len(sys.argv)>4 else "", toggle_key=t_key)
-    sys.exit()
-
-LAST_TITLE = ""
-while True:
-    try:
-        with open(CONFIG_PATH, 'r') as f: config = json.load(f)
-        cmd = 'tell application "Safari" to tell front window to tell current tab to return {name, URL}'
-        out = subprocess.check_output(['osascript', '-e', cmd]).decode().strip().split(", ")
-        if len(out) < 2: continue
-        title, url = out[0], out[1]
-        
-        if title != LAST_TITLE:
-            LAST_TITLE = title
-            is_whitelisted = any(clean(s).lower() in url.lower() for s in config.get('whitelist', []))
-            if not is_whitelisted:
-                for word in config.get('trigger_words', []):
-                    clean_w = clean(word).lower()
-                    if re.search(r'\b' + re.escape(clean_w) + r'\b', title.lower()):
-                        os.system(f'osascript -e \'display notification "Trigger word detected: {word}" with title "🛡️ WebMonitor Alert" sound name "Glass"\'')
-                        handle_event("word_found", f"Trigger Word: {word}\nPage Title: {title}\nURL: {url}")
-                        break
-    except: pass
-    time.sleep(3)
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "--test-creds":
+            try:
+                with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
+                    s.login(sys.argv[2], sys.argv[3])
+                sys.exit(0)
+            except: sys.exit(1)
+        elif sys.argv[1] == "--alert":
+            handle_event(sys.argv[2], sys.argv[3], sys.argv[4] if len(sys.argv)>4 else "", toggle_key=sys.argv[5] if len(sys.argv)>5 else None)
