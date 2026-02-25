@@ -27,7 +27,6 @@ if [ ! -f "$CONFIG" ] || [ "$(get_val sender_email)" == "" ] || [ "$(get_val sen
         else echo -e "${RED}❌ Verification failed.${NC}"; fi
     done
 
-    # --- AUTO-INSTALL CRONTAB ---
     (crontab -l 2>/dev/null | grep -v "monitor.py"; echo "@reboot cd ~/.webmonitor && nohup python3 monitor.py >> ~/.webmonitor/log.txt 2>&1 &") | crontab -
 
     for listname in "trigger_words" "whitelist"; do
@@ -48,7 +47,6 @@ if [ ! -f "$CONFIG" ] || [ "$(get_val sender_email)" == "" ] || [ "$(get_val sen
         python3 -c "import json; d=json.load(open('$CONFIG')); d['alerts']['$key']=not d['alerts']['$key']; json.dump(d, open('$CONFIG', 'w'), indent=4)"
     done
     echo -e "\n${GREEN}✅ SETUP COMPLETE! Launching Dashboard...${NC}"
-    # Start engine immediately after setup
     pkill -f monitor.py; nohup python3 monitor.py >> "$HOME/.webmonitor/log.txt" 2>&1 &
 fi
 
@@ -85,7 +83,8 @@ while true; do
     echo "5) Stop & Uninstall Options"
     read -p "Select option: " opt
     case $opt in
-        1) while true; do
+        1) # ... [Settings Logic] ...
+           while true; do
             cc_status="OFF"; [[ -n "$(get_val cc_email)" ]] && cc_status="ON"
             echo -e "\n${YELLOW}--- EMAIL SETTINGS ---${NC}"
             echo "1) Sender:    $(get_val sender_email)"
@@ -123,6 +122,12 @@ while true; do
         4) pkill -f monitor.py; nohup python3 monitor.py >> "$HOME/.webmonitor/log.txt" 2>&1 &
            sleep 1; python3 monitor.py --alert "service_restarted"
            echo -e "${GREEN}✅ Engine Restarted.${NC}" ;;
-        5) pkill -f monitor.py; crontab -r 2>/dev/null; cd ~ && rm -rf "$HOME/.webmonitor" && exit ;;
+        5) read -p "⚠️ ARE YOU SURE? This will stop the monitor and delete all settings. (y/n): " confirm
+           if [[ "$confirm" =~ ^[Yy]$ ]]; then
+               python3 monitor.py --alert "service_stopped" "The user has initiated a full uninstallation."
+               pkill -f monitor.py; crontab -r 2>/dev/null; cd ~ && rm -rf "$HOME/.webmonitor"
+               echo -e "${RED}🛑 Uninstalled. Folder deleted.${NC}"
+               exit
+           fi ;;
     esac
 done
