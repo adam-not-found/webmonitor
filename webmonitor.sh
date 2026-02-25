@@ -30,12 +30,12 @@ if [ ! -f "$CONFIG" ] || [ "$(get_val sender_email)" == "" ] || [ "$(get_val sen
     # 2. SENDER GUIDE
     echo -e "\n${YELLOW}Step 2: The 'Sender' Account (Gmail)${NC}"
     echo "This account physically sends the emails."
-    echo "1. Go to: https://myaccount.google.com/apppasswords"
-    echo "2. Create a name like 'WebMonitor'."
-    echo "3. Copy the 16-character code."
     
     while true; do
         read -p "Enter SENDER Gmail: " n_snd
+        echo "1. Go to: https://myaccount.google.com/apppasswords"
+        echo "2. Create a name like 'WebMonitor'."
+        echo "3. Copy the 16-character code."
         read -p "Enter App Password: " n_pw
         n_pw=$(echo $n_pw | tr -d ' ')
         if python3 monitor.py --test-creds "$n_snd" "$n_pw" "$n_rec"; then
