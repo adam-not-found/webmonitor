@@ -16,13 +16,11 @@ manage_list() {
         case $subopt in
             [Aa]*) read -p "Enter $name: " val
                python3 -c "import json; d=json.load(open('$CONFIG')); d['$key'].append('$val'); json.dump(d, open('$CONFIG', 'w'), indent=4)"
-               # Pass the toggle key as the 5th argument
-               python3 monitor.py --alert "settings_adjusted" "You added '$val' to the $name list. The monitor will now respect this change." "" "added_$key" ;;
+               python3 monitor.py --alert "settings_adjusted" "You added '$val' to the $name list." "" "added_$key" ;;
             [Rr]*) read -p "Enter number to remove: " num
-               idx=$((num-1)); item_to_rm=${items[$idx]}
+               idx=$==num-1==; item_to_rm=${items[$idx]}
                if [[ -n "$item_to_rm" ]]; then
                    python3 -c "import json; d=json.load(open('$CONFIG')); d['$key'].remove('$item_to_rm'); json.dump(d, open('$CONFIG', 'w'), indent=4)"
-                   # Pass the toggle key as the 5th argument
                    python3 monitor.py --alert "settings_adjusted" "You removed '$item_to_rm' from the $name list." "" "removed_$key"
                fi ;;
             0) break ;;
@@ -64,8 +62,7 @@ while true; do
                    new_cc=""; [[ "$confirm" =~ ^[Yy]$ ]] && new_cc="$(get_val sender_email)"
                    if [[ "$new_cc" != "$(get_val cc_email)" ]]; then
                        save_val "cc_email" "'$new_cc'"
-                       msg="CC Mode changed to $confirm."
-                       python3 monitor.py --alert "settings_adjusted" "$msg"
+                       python3 monitor.py --alert "settings_adjusted" "CC Mode changed to $confirm."
                    fi ;;
                 0) break ;;
             esac
@@ -88,7 +85,29 @@ while true; do
            done ;;
         4) python3 monitor.py --alert "service_restarted"; pkill -f monitor.py; nohup python3 monitor.py >> $HOME/.webmonitor/log.txt 2>&1 &
            echo -e "${GREEN}✅ Engine Restarted.${NC}" ;;
-        5) pkill -f monitor.py 2>/dev/null; echo -e "${YELLOW}Stopped.${NC}"
-           read -p "Uninstall? (y/n): " un; [[ "$un" =~ ^[Yy]$ ]] && read -p "Type 'confirm deletion': " c && [[ "$c" == "confirm deletion" ]] && rm -rf "$HOME/.webmonitor" && cd ~ && rm -rf "$HOME/webmonitor" && exit ;;
+        5) echo -e "${RED}⚠️  UNINSTALLATION PROCESS${NC}"
+           read -p "Are you sure you want to stop and delete everything? (y/n): " un
+           if [[ "$un" =~ ^[Yy]$ ]]; then
+               read -p "Type 'confirm deletion' to proceed: " c
+               if [[ "$c" == "confirm deletion" ]]; then
+                   echo -e "${YELLOW}Stopping services...${NC}"
+                   pkill -f monitor.py 2>/dev/null
+                   
+                   echo -e "${YELLOW}Clearing background schedule (Crontab)...${NC}"
+                   crontab -r 2>/dev/null
+                   
+                   echo -e "${YELLOW}Deleting configuration files...${NC}"
+                   rm -rf "$HOME/.webmonitor"
+                   
+                   echo -e "${YELLOW}Removing project directory...${NC}"
+                   # Use a subshell to delete the directory we are currently in
+                   (cd ~ && rm -rf "$HOME/webmonitor")
+                   
+                   echo -e "${GREEN}✅ Uninstall complete. Everything has been removed.${NC}"
+                   exit
+               else
+                   echo "Confirmation failed. Operation cancelled."
+               fi
+           fi ;;
     esac
 done
