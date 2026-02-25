@@ -5,47 +5,6 @@ CONFIG="$HOME/.webmonitor/config.json"
 get_val() { python3 -c "import json; print(json.load(open('$CONFIG'))['$1'])" 2>/dev/null; }
 save_val() { python3 -c "import json; d=json.load(open('$CONFIG')); d['$1']=$2; json.dump(d, open('$CONFIG', 'w'), indent=4)" ; }
 
-# --- SETUP WIZARD ---
-if [ ! -f "$CONFIG" ] || [ "$(get_val sender_email)" == "temp" ] || [ -z "$(get_val sender_email)" ] || [ "$(get_val sender_email)" == "None" ]; then
-    echo -e "${BLUE}🛡️  WEBMONITOR FIRST-TIME SETUP${NC}"
-    mkdir -p "$HOME/.webmonitor"
-    echo '{"sender_email":"","app_password":"","recipient_email":"","cc_email":"","whitelist":[],"trigger_words":[],"alerts":{"word_found":true,"added_trigger_words":true,"removed_trigger_words":true,"added_whitelist":true,"removed_whitelist":true,"service_restarted":true,"service_stopped":true,"recipient_changed":true}}' > "$CONFIG"
-    read -p "Enter the RECIPIENT email: " n_rec
-    save_val "recipient_email" "'$n_rec'"
-    while true; do
-        echo -e "\n${YELLOW}Sender Setup (Need 2FA + App Password):${NC}"
-        read -p "Enter SENDER Gmail: " n_snd
-        read -p "Enter App Password: " n_pw
-        n_pw=$(echo $n_pw | tr -d ' ')
-        if python3 monitor.py --test-creds "$n_snd" "$n_pw" "$n_rec"; then
-            save_val "sender_email" "'$n_snd'"; save_val "app_password" "'$n_pw'"
-            read -p "Enable CC Mode (Send copies to yourself)? (y/n): " n_cc
-            [[ "$n_cc" =~ ^[Yy]$ ]] && save_val "cc_email" "'$n_snd'"
-            break
-        else echo -e "${RED}❌ Verification failed.${NC}"; fi
-    done
-    for listname in "trigger_words" "whitelist"; do
-        while true; do
-            echo -e "\n${YELLOW}Add to $listname (Type '0' to finish):${NC}"
-            read -p "> " item
-            [[ "$item" == "0" ]] && break
-            python3 -c "import json; d=json.load(open('$CONFIG')); d['$listname'].append('$item'); json.dump(d, open('$CONFIG', 'w'), indent=4)"
-        done
-    done
-    while true; do
-        echo -e "\n${YELLOW}Toggle Alerts (Type '0' to finish):${NC}"
-        python3 -c "import json; d=json.load(open('$CONFIG')); [print(f'{i+1}) [{\"ON\" if v else \"OFF\"}] {k}') for i, (k, v) in enumerate(d['alerts'].items()) if k != 'settings_adjusted']"
-        read -p "> " t_opt
-        [[ "$t_opt" == "0" ]] || [[ -z "$t_opt" ]] && break
-        key=$(python3 -c "import json; d=json.load(open('$CONFIG')); keys=[k for k in d['alerts'].keys() if k != 'settings_adjusted']; print(keys[$t_opt-1])")
-        python3 -c "import json; d=json.load(open('$CONFIG')); d['alerts']['$key']=not d['alerts']['$key']; json.dump(d, open('$CONFIG', 'w'), indent=4)"
-    done
-    echo -e "\n${GREEN}✅ SETUP COMPLETE!${NC}"
-    echo "To access this menu later, run: cd ~/.webmonitor && ./webmonitor.sh"
-    python3 monitor.py --alert "service_restarted"
-    nohup python3 monitor.py >> "$HOME/.webmonitor/log.txt" 2>&1 &
-fi
-
 # --- FULL DASHBOARD ---
 manage_list() {
     local key=$1; local name=$2
@@ -88,15 +47,15 @@ while true; do
             echo "0) Back"
             read -p "Selection: " e_opt
             case $e_opt in
-                1) read -p "New Sender Gmail: " n_em; read -p "New App Password: " n_pw
+                1) read -p "New Sender: " n_em; read -p "New PW: " n_pw
                    n_pw=$(echo $n_pw | tr -d ' ')
                    if python3 monitor.py --test-creds "$n_em" "$n_pw" "$(get_val recipient_email)"; then
                        save_val "sender_email" "'$n_em'"; save_val "app_password" "'$n_pw'"
-                   else echo -e "${RED}❌ Verification failed.${NC}"; fi ;;
+                   fi ;;
                 2) old_r=$(get_val recipient_email); read -p "New Recipient: " n_r
                    save_val "recipient_email" "'$n_r'"; python3 monitor.py --alert "recipient_changed" "$n_r" "$old_r" ;;
-                3) read -p "Enable CC Mode? (y/n): " confirm; new_cc=""; [[ "$confirm" =~ ^[Yy]$ ]] && new_cc="$(get_val sender_email)"
-                   save_val "cc_email" "'$new_cc'"; python3 monitor.py --alert "settings_adjusted" "CC Mode changed." ;;
+                3) read -p "Enable CC? (y/n): " confirm; new_cc=""; [[ "$confirm" =~ ^[Yy]$ ]] && new_cc="$(get_val sender_email)"
+                   save_val "cc_email" "'$new_cc'"; python3 monitor.py --alert "settings_adjusted" "CC Mode changed to $confirm." ;;
                 0) break ;;
             esac
            done ;;
@@ -112,28 +71,14 @@ while true; do
             read -p "Toggle (0 to back): " t_opt
             [[ "$t_opt" == "0" ]] && break
             key=$(python3 -c "import json; d=json.load(open('$CONFIG')); keys=[k for k in d['alerts'].keys() if k != 'settings_adjusted']; print(keys[$t_opt-1])")
-            python3 -c "import json; d=json.load(open('$CONFIG')); d['alerts']['$key']=not d['alerts']['$key']; json.dump(d, open('$CONFIG', 'w'), indent=4)"
+            python3 -c "import json; d=json.load(open('$CONFIG')); d['alerts']['$key']=not d['alerts']['$key']; val=d['alerts']['$key']; json.dump(d, open('$CONFIG', 'w'), indent=4); print(f'SETTING:{key}:{val}')" > .tmp_toggle
+            t_info=$(cat .tmp_toggle | grep "SETTING:")
+            python3 monitor.py --alert "settings_adjusted" "Alert toggle changed: ${t_info#SETTING:}"
+            rm .tmp_toggle
            done ;;
-        4) python3 monitor.py --alert "service_restarted"; pkill -f monitor.py; nohup python3 monitor.py >> "$HOME/.webmonitor/log.txt" 2>&1 &
+        4) pkill -f monitor.py; nohup python3 monitor.py >> "$HOME/.webmonitor/log.txt" 2>&1 &
+           python3 monitor.py --alert "service_restarted"
            echo -e "${GREEN}✅ Engine Restarted.${NC}" ;;
-        5) echo -e "${RED}⚠️  UNINSTALLATION PROCESS${NC}"
-           read -p "Are you sure you want to delete everything? (y/n): " un
-           if [[ "$un" =~ ^[Yy]$ ]]; then
-               read -p "Type 'confirm deletion' to proceed: " c
-               if [[ "$c" == "confirm deletion" ]]; then
-                   echo -e "${YELLOW}Sending final shutdown alert...${NC}"
-                   python3 monitor.py --alert "service_stopped"
-                   echo -e "${YELLOW}Stopping background processes...${NC}"
-                   pkill -f monitor.py 2>/dev/null
-                   echo -e "${YELLOW}Clearing Crontab...${NC}"
-                   crontab -r 2>/dev/null
-                   echo -e "${YELLOW}Deleting hidden directory and moving to Home...${NC}"
-                   # The magic part: move to ~ before deleting the current folder
-                   cd ~
-                   rm -rf "$HOME/.webmonitor"
-                   echo -e "${GREEN}✅ Uninstall complete. You are now in your home directory.${NC}"
-                   exit
-               fi
-           fi ;;
+        5) cd ~ && rm -rf "$HOME/.webmonitor" && exit ;;
     esac
 done
