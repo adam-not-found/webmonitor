@@ -19,7 +19,7 @@ if [ ! -f "$CONFIG" ] || [ "$(get_val sender_email)" == "" ] || [ "$(get_val sen
     echo -e "${CYAN}🛡️  WEBMONITOR FIRST-TIME SETUP${NC}"
     echo "=================================="
     mkdir -p "$HOME/.webmonitor"
-    echo '{"sender_email":"","app_password":"","recipient_email":"","cc_email":"","whitelist":[],"trigger_words":[],"alerts":{"word_found":true,"added_trigger_words":true,"removed_trigger_words":true,"added_whitelist":true,"removed_whitelist":true,"service_restarted":true,"service_stopped":true,"recipient_changed":true}}' > "$CONFIG"
+    echo '{"sender_email":"","app_password":"","recipient_email":"","cc_email":"","whitelist":[],"trigger_words":[],"alerts":{"word_found":true,"added_trigger_words":false,"removed_trigger_words":true,"added_whitelist":true,"removed_whitelist":false,"service_restarted":true,"service_stopped":true,"recipient_changed":true}}' > "$CONFIG"
     
     # 1. RECIPIENT
     echo -e "\n${PURPLE}Step 1: The 'Recipient' Account${NC}"
@@ -76,20 +76,40 @@ manage_list() {
     local key=$1; local name=$2
     while true; do
         echo -e "\n${BLUE}--- MANAGE $name ---${NC}"
+        # Fetch current items and sort them for display
         items=($(python3 -c "import json; d=json.load(open('$CONFIG')); print(' '.join(sorted(d['$key'])))"))
         for i in "${!items[@]}"; do echo "$((i+1))) ${items[$i]}"; done
-        echo -e "\nA) Add $name  R) Remove $name  0) Back"
+        
+        echo -e "\nA) Add Multiple  R) Remove Multiple  0) Back"
         read -p "Selection: " subopt
         case $subopt in
-            [Aa]*) read -p "Enter $name: " val
-               python3 -c "import json; d=json.load(open('$CONFIG')); d['$key'].append('$val'); json.dump(d, open('$CONFIG', 'w'), indent=4)"
-               python3 monitor.py --alert "settings_adjusted" "You added '$val' to the $name list." "" "added_$key" ;;
-            [Rr]*) read -p "Enter number to remove: " num
-               idx=$((num-1)); item_to_rm=${items[$idx]}
-               if [[ -n "$item_to_rm" ]]; then
-                   python3 -c "import json; d=json.load(open('$CONFIG')); d['$key'].remove('$item_to_rm'); json.dump(d, open('$CONFIG', 'w'), indent=4)"
-                   python3 monitor.py --alert "settings_adjusted" "You removed '$item_to_rm' from the $name list." "" "removed_$key"
-               fi ;;
+            [Aa]*)
+               while true; do
+                   echo -e "${GREEN}Adding $name (Type '0' to stop)${NC}"
+                   read -p "> " val
+                   [[ "$val" == "0" ]] && break
+                   python3 -c "import json; d=json.load(open('$CONFIG')); d['$key'].append('$val'); json.dump(d, open('$CONFIG', 'w'), indent=4)"
+                   python3 monitor.py --alert "settings_adjusted" "You added '$val' to the $name list." "" "added_$key"
+               done ;;
+            [Rr]*)
+               while true; do
+                   # Refresh list inside the loop so numbers stay accurate as you delete
+                   items=($(python3 -c "import json; d=json.load(open('$CONFIG')); print(' '.join(sorted(d['$key'])))"))
+                   echo -e "${RED}Removing $name (Type '0' to stop)${NC}"
+                   for i in "${!items[@]}"; do echo "$((i+1))) ${items[$i]}"; done
+                   read -p "Enter number: " num
+                   [[ "$num" == "0" ]] && break
+                   
+                   idx=$((num-1))
+                   item_to_rm=${items[$idx]}
+                   if [[ -n "$item_to_rm" ]]; then
+                       python3 -c "import json; d=json.load(open('$CONFIG')); d['$key'].remove('$item_to_rm'); json.dump(d, open('$CONFIG', 'w'), indent=4)"
+                       python3 monitor.py --alert "settings_adjusted" "You removed '$item_to_rm' from the $name list." "" "removed_$key"
+                       echo -e "Removed: $item_to_rm"
+                   else
+                       echo -e "Invalid number."
+                   fi
+               done ;;
             0) break ;;
         esac
     done
