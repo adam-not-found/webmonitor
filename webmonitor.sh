@@ -5,7 +5,7 @@ CONFIG="$HOME/.webmonitor/config.json"
 get_val() { python3 -c "import json; print(json.load(open('$CONFIG'))['$1'])" 2>/dev/null; }
 save_val() { python3 -c "import json; d=json.load(open('$CONFIG')); d['$1']=$2; json.dump(d, open('$CONFIG', 'w'), indent=4)" ; }
 
-if [ ! -f "$CONFIG" ] || [ "$(get_val sender_email)" == "temp" ] || [ -z "$(get_val sender_email)" ]; then
+if [ ! -f "$CONFIG" ] || [ "$(get_val sender_email)" == "temp" ] || [ -z "$(get_val sender_email)" ] || [ "$(get_val sender_email)" == "None" ]; then
     echo -e "${BLUE}🛡️  WEBMONITOR FIRST-TIME SETUP${NC}"
     mkdir -p "$HOME/.webmonitor"
     echo '{"sender_email":"","app_password":"","recipient_email":"","cc_email":"","whitelist":[],"trigger_words":[],"alerts":{"word_found":true,"added_trigger_words":true,"removed_trigger_words":true,"added_whitelist":true,"removed_whitelist":true,"service_restarted":true,"service_stopped":true,"recipient_changed":true}}' > "$CONFIG"
@@ -26,17 +26,18 @@ if [ ! -f "$CONFIG" ] || [ "$(get_val sender_email)" == "temp" ] || [ -z "$(get_
         else echo -e "${RED}❌ Verification failed.${NC}"; fi
     done
 
-    for list in "trigger_words" "whitelist"; do
+    # Fixed the uppercase substitution error here
+    for listname in "trigger_words" "whitelist"; do
         while true; do
-            echo -e "\n${YELLOW}Add to ${list^^} (0 to finish):${NC}"
+            echo -e "\n${YELLOW}Add to $listname (Type '0' to finish):${NC}"
             read -p "> " item
             [[ "$item" == "0" ]] && break
-            python3 -c "import json; d=json.load(open('$CONFIG')); d['$list'].append('$item'); json.dump(d, open('$CONFIG', 'w'), indent=4)"
+            python3 -c "import json; d=json.load(open('$CONFIG')); d['$listname'].append('$item'); json.dump(d, open('$CONFIG', 'w'), indent=4)"
         done
     done
 
     while true; do
-        echo -e "\n${YELLOW}Toggle Alerts (0 to finish):${NC}"
+        echo -e "\n${YELLOW}Toggle Alerts (Type '0' to finish):${NC}"
         python3 -c "import json; d=json.load(open('$CONFIG')); [print(f'{i+1}) [{\"ON\" if v else \"OFF\"}] {k}') for i, (k, v) in enumerate(d['alerts'].items()) if k != 'settings_adjusted']"
         read -p "> " t_opt
         [[ "$t_opt" == "0" ]] || [[ -z "$t_opt" ]] && break
@@ -50,4 +51,15 @@ if [ ! -f "$CONFIG" ] || [ "$(get_val sender_email)" == "temp" ] || [ -z "$(get_
     nohup python3 monitor.py >> "$HOME/.webmonitor/log.txt" 2>&1 &
 fi
 
-# ... [Main Dashboard Logic remains the same] ...
+while true; do
+    echo -e "\n${BLUE}🛡️  WEB MONITOR DASHBOARD${NC}"
+    echo "1) View Config  2) Restart Engine  3) Uninstall  0) Exit"
+    read -p "Select: " opt
+    case $opt in
+        1) echo -e "\nSender: $(get_val sender_email)\nRecipient: $(get_val recipient_email)";;
+        2) pkill -f monitor.py; nohup python3 monitor.py >> "$HOME/.webmonitor/log.txt" 2>&1 &
+           echo -e "${GREEN}Restarted.${NC}";;
+        3) pkill -f monitor.py; crontab -r; rm -rf "$HOME/.webmonitor"; echo "Cleaned up."; exit;;
+        0) exit;;
+    esac
+done
