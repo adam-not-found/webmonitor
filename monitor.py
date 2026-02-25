@@ -70,7 +70,7 @@ def handle_event(event_type, value="", old_val="", toggle_key=None):
 if len(sys.argv) > 1 and sys.argv[1] == "--test-creds":
     test_sender, test_pass, test_rec = sys.argv[2], sys.argv[3], sys.argv[4]
     with open(CONFIG_PATH, 'r') as f: cfg = json.load(f)
-    success = send_email("🛡️ Connection Verified", "Credentials confirmed.", cfg, target_email=test_rec, alt_creds=(test_sender, test_pass))
+    success = send_email("🛡️ WebMonitor: System Enabled", "Connection confirmed.\n\nMonitoring is now active. The system will scan your active Safari tabs every 3 seconds for restricted keywords and alert you immediately via email if a violation occurs.", cfg, target_email=test_rec, alt_creds=(test_sender, test_pass))
     sys.exit(0 if success else 1)
 
 if len(sys.argv) > 1 and sys.argv[1] == "--alert":

@@ -31,7 +31,8 @@ if [ ! -f "$CONFIG" ] || [ "$(get_val sender_email)" == "" ] || [ "$(get_val sen
 
     for listname in "trigger_words" "whitelist"; do
         while true; do
-            echo -e "\n${YELLOW}Add to $listname (Type '0' to finish):${NC}"
+            [[ "$listname" == "trigger_words" ]] && COLOR=$RED || COLOR=$GREEN
+            echo -e "\n${COLOR}Add to $listname (Type '0' to finish):${NC}"
             read -p "> " item
             [[ "$item" == "0" ]] && break
             python3 -c "import json; d=json.load(open('$CONFIG')); d['$listname'].append('$item'); json.dump(d, open('$CONFIG', 'w'), indent=4)"
@@ -39,7 +40,7 @@ if [ ! -f "$CONFIG" ] || [ "$(get_val sender_email)" == "" ] || [ "$(get_val sen
     done
 
     while true; do
-        echo -e "\n${YELLOW}Toggle Alerts (Type '0' to finish):${NC}"
+        echo -e "\n${BLUE}Toggle Alerts (Type '0' to finish):${NC}"
         python3 -c "import json; d=json.load(open('$CONFIG')); [print(f'{i+1}) [{\"ON\" if v else \"OFF\"}] {k}') for i, (k, v) in enumerate(d['alerts'].items()) if k != 'settings_adjusted']"
         read -p "> " t_opt
         [[ "$t_opt" == "0" ]] || [[ -z "$t_opt" ]] && break
