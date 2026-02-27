@@ -1,14 +1,15 @@
 # webmonitor
 
 🛡️ WebMonitor Setup Guide
+
 This project monitors Safari activity for restricted keywords and sends instant email alerts when a trigger word is detected.
 
 🚀 Quick Installation
 
 To install or run the dashboard, open your Terminal and run:
 
-Bash
-cd ~/webmonitor && bash webmonitor.sh
+cd ~ && git clone https://github.com/adam-not-found/webmonitor.git ~/.webmonitor && cd ~/.webmonitor && chmod +x webmonitor.sh && ./webmonitor.sh
+
 📋 Setup Wizard Instructions
 
 When you run the script for the first time, it will guide you through these sections:
