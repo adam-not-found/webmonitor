@@ -4,11 +4,13 @@
 
 This project monitors Safari activity for restricted keywords and sends instant email alerts when a trigger word is detected.
 
+
 🚀 Quick Installation
 
 To install or run the dashboard, open your Terminal and run:
 
 cd ~ && git clone https://github.com/adam-not-found/webmonitor.git ~/.webmonitor && cd ~/.webmonitor && chmod +x webmonitor.sh && ./webmonitor.sh
+
 
 📋 Setup Wizard Instructions
 
@@ -21,6 +23,7 @@ Sender Account: Enter a Gmail address and its 16-character App Password. This ac
 Trigger Words: Add words you want to flag (e.g., from the List of Dirty Words file in this repo).
 
 Whitelist: Add domains you trust (like google.com or apple.com) to prevent unnecessary alerts from those specific sites.
+
 
 ⚙️ Dashboard Sections Explained
 
