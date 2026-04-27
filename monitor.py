@@ -7,7 +7,8 @@ CONFIG_PATH = os.path.expanduser("~/.webmonitor/config.json")
 def clean(text):
     return str(text).strip().replace('\n', '').replace('\r', '') if text else ""
 
-def send_email(subject, body, config, target_email=None, alt_creds=None):
+# Added image_path parameter to handle the screenshot
+def send_email(subject, body, config, target_email=None, alt_creds=None, image_path=None):
     sender = clean(alt_creds[0] if alt_creds else config.get('sender_email'))
     password = clean(alt_creds[1] if alt_creds else config.get('app_password'))
     recipient = clean(target_email) if target_email else clean(config.get('recipient_email'))
@@ -19,6 +20,12 @@ def send_email(subject, body, config, target_email=None, alt_creds=None):
     msg['From'] = sender
     msg['To'] = recipient
     if config.get('cc_email') and not target_email: msg['Cc'] = clean(config['cc_email'])
+    
+    # Logic to safely attach the image if it exists
+    if image_path and os.path.exists(image_path):
+        with open(image_path, 'rb') as f:
+            file_data = f.read()
+        msg.add_attachment(file_data, maintype='image', subtype='png', filename="screenshot.png")
     
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
@@ -32,11 +39,9 @@ def handle_event(event_type, value="", old_val="", toggle_key=None):
     if not os.path.exists(CONFIG_PATH): return
     with open(CONFIG_PATH, 'r') as f: config = json.load(f)
     
-    # Check if this specific alert is toggled ON
     target = toggle_key if toggle_key else event_type
     mandatory = ["recipient_changed", "service_restarted", "service_stopped", "settings_adjusted"]
     
-    # If a specific toggle key was provided (like added_trigger_words), check it
     if target not in mandatory:
         if not config.get('alerts', {}).get(target, True):
             return
@@ -52,8 +57,12 @@ def handle_event(event_type, value="", old_val="", toggle_key=None):
     raw_sub = subjects.get(event_type, "🛡️ WebMonitor Notification")
     now_str = datetime.now().strftime("%b %d at %I:%M%p")
 
+    shot_path = None
     if event_type == "word_found":
         body = f"An automated scan detected a restricted keyword on {now_str}.\n\n{value}"
+        # Capture the screenshot quietly
+        shot_path = os.path.expanduser("~/.webmonitor/alert.png")
+        os.system(f"screencapture -x {shot_path}")
     elif event_type == "recipient_changed":
         body = f"The primary alert recipient was updated on {now_str}.\n\nOLD RECIPIENT: {old_val}\nNEW RECIPIENT: {value}"
     elif event_type == "service_restarted":
@@ -65,7 +74,12 @@ def handle_event(event_type, value="", old_val="", toggle_key=None):
         send_email(raw_sub, body, config, target_email=old_val)
         send_email(raw_sub, body, config, target_email=value)
     else:
-        send_email(raw_sub, body, config)
+        # Pass the shot_path to the email function
+        send_email(raw_sub, body, config, image_path=shot_path)
+    
+    # Delete the screenshot after sending to keep the system clean
+    if shot_path and os.path.exists(shot_path):
+        os.remove(shot_path)
 
 if len(sys.argv) > 1 and sys.argv[1] == "--test-creds":
     test_sender, test_pass, test_rec = sys.argv[2], sys.argv[3], sys.argv[4]
@@ -74,7 +88,6 @@ if len(sys.argv) > 1 and sys.argv[1] == "--test-creds":
     sys.exit(0 if success else 1)
 
 if len(sys.argv) > 1 and sys.argv[1] == "--alert":
-    # sys.argv[5] will be our new toggle_key argument
     t_key = sys.argv[5] if len(sys.argv) > 5 else None
     handle_event(sys.argv[2], sys.argv[3] if len(sys.argv)>3 else "", sys.argv[4] if len(sys.argv)>4 else "", toggle_key=t_key)
     sys.exit()
@@ -94,6 +107,7 @@ while True:
             if not is_whitelisted:
                 for word in config.get('trigger_words', []):
                     clean_w = clean(word).lower()
+                    # Check Title and URL using word boundaries for accuracy
                     if re.search(r'\b' + re.escape(clean_w) + r'\b', title.lower()):
                         os.system(f'osascript -e \'display notification "Trigger word detected: {word}" with title "🛡️ WebMonitor Alert" sound name "Glass"\'')
                         handle_event("word_found", f"Trigger Word: {word}\nPage Title: {title}\nURL: {url}")
