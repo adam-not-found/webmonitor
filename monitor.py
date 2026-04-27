@@ -62,7 +62,7 @@ def handle_event(event_type, value="", old_val="", toggle_key=None):
         body = f"An automated scan detected a restricted keyword on {now_str}.\n\n{value}"
         # Capture the screenshot quietly
         shot_path = os.path.expanduser("~/.webmonitor/alert.png")
-        os.system(f"screencapture -x {shot_path}")
+        os.system(f"/usr/sbin/screencapture -x {shot_path}")
     elif event_type == "recipient_changed":
         body = f"The primary alert recipient was updated on {now_str}.\n\nOLD RECIPIENT: {old_val}\nNEW RECIPIENT: {value}"
     elif event_type == "service_restarted":
