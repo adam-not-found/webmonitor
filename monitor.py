@@ -93,24 +93,82 @@ if len(sys.argv) > 1 and sys.argv[1] == "--alert":
     sys.exit()
 
 LAST_TITLE = ""
+LAST_TYPED = ""
+LAST_TRIGGER_CONTEXT = ""  # New variable to prevent repeat alerts
+
 while True:
     try:
         with open(CONFIG_PATH, 'r') as f: config = json.load(f)
-        cmd = 'tell application "Safari" to tell front window to tell current tab to return {name, URL}'
-        out = subprocess.check_output(['osascript', '-e', cmd]).decode().strip().split(", ")
-        if len(out) < 2: continue
-        title, url = out[0], out[1]
         
-        if title != LAST_TITLE:
+        ascript = '''
+        tell application "Safari"
+            if it is running and (count windows) > 0 then
+                tell front window to tell current tab
+                    set theTitle to name
+                    set theURL to URL
+                    set theTyped to ""
+                    try
+                        tell application "System Events" to tell process "Safari"
+                            set focusedElement to value of attribute "AXFocusedUIElement"
+                            set theTyped to value of focusedElement as string
+                        end tell
+                    end try
+                    return theTitle & "||" & theURL & "||" & theTyped
+                end tell
+            else
+                return ""
+            end if
+        end tell
+        '''
+        
+        out_raw = subprocess.check_output(['osascript', '-e', ascript]).decode().strip()
+        if not out_raw:
+            time.sleep(3)
+            continue
+            
+        parts = out_raw.split("||")
+        title, url, typed_text = parts[0], parts[1], parts[2] if len(parts) > 2 else ""
+
+        # Update tracking variables
+        is_new_page = title != LAST_TITLE
+        is_new_typing = typed_text != LAST_TYPED and typed_text != ""
+        
+        if is_new_page or is_new_typing:
             LAST_TITLE = title
+            LAST_TYPED = typed_text
+            
             is_whitelisted = any(clean(s).lower() in url.lower() for s in config.get('whitelist', []))
+            
             if not is_whitelisted:
                 for word in config.get('trigger_words', []):
                     clean_w = clean(word).lower()
-                    # Check Title and URL using word boundaries for accuracy
-                    if re.search(r'\b' + re.escape(clean_w) + r'\b', title.lower()):
-                        os.system(f'osascript -e \'display notification "Trigger word detected: {word}" with title "🛡️ WebMonitor Alert" sound name "Glass"\'')
-                        handle_event("word_found", f"Trigger Word: {word}\nPage Title: {title}\nURL: {url}")
+                    
+                    # Pattern for strict whole-word matching only
+                    pattern = r'\b' + re.escape(clean_w) + r'\b'
+                    
+                    found_in_title = re.search(pattern, title.lower())
+                    found_in_url = re.search(pattern, url.lower())
+                    
+                    # Apply strict matching to typed text to avoid "classic" triggers
+                    found_in_typing = False
+                    if typed_text:
+                        found_in_typing = re.search(pattern, typed_text.lower())
+                    
+                    if found_in_title or found_in_url or found_in_typing:
+                        # Create a unique fingerprint for this specific event
+                        current_context = f"{clean_w}|{url if not found_in_typing else typed_text}"
+                        
+                        # ONLY trigger if this context is different from the last one
+                        if current_context != LAST_TRIGGER_CONTEXT:
+                            LAST_TRIGGER_CONTEXT = current_context
+                            
+                            loc = "Title/URL" if (found_in_title or found_in_url) else "Typed Text"
+                            os.system(f'osascript -e \'display notification "Trigger: {word}" with title "🛡️ WebMonitor"\'')
+                            handle_event("word_found", f"Trigger Word: {word}\nLocation: {loc}\nPage: {title}\nURL: {url}\nInput: {typed_text}")
                         break
-    except: pass
+            else:
+                # If we move to a whitelisted page, reset the context so we can trigger again later
+                LAST_TRIGGER_CONTEXT = ""
+    except:
+        pass
     time.sleep(3)
