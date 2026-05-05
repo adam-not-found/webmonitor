@@ -1,2 +1,16 @@
+# Exclude sensitive personal credentials
 config.json
+
+# Exclude system and error logs
+*.log
+
+# Exclude Python cache files
+__pycache__/
+*.pyc
+
+# Exclude local build artifacts if any remain
+build/
+dist/
+*.spec
+
 log.txt
