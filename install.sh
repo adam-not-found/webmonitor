@@ -103,15 +103,49 @@ echo "Open Dashboard | bash='$HOME/.webmonitor/webmonitor.sh' terminal=true"
 EOF
 chmod +x "$PLUGIN_DIR/webmonitor.3s.sh"
 
-# Dynamically construct the specific LaunchAgent from the source template file
-if [ -f "com.user.webmonitor.plist" ]; then
-    sed -e "s|TARGET_PYTHON_PATH|$BREW_PYTHON|g" \
-        -e "s|TARGET_HOME_DIR|$HOME|g" \
-        com.user.webmonitor.plist > "$LAUNCH_AGENT_DIR/com.user.webmonitor.plist"
-else
-    echo -e "${RED}❌ Error: com.user.webmonitor.plist template file missing from directory root.${NC}"
-    exit 1
+# Dynamically locate the active Python 3 framework binary path executing this script
+TARGET_PYTHON=$(which python3)
+
+# Failsafe check to prioritize standard frameworks if sitting on a restricted system stub
+if [[ "$TARGET_PYTHON" == "/usr/bin/python3" ]] && [ -f "/Library/Frameworks/Python.framework/Versions/Current/bin/python3" ]; then
+    TARGET_PYTHON="/Library/Frameworks/Python.framework/Versions/Current/bin/python3"
 fi
+
+echo "Mapping background daemon execution layer to: $TARGET_PYTHON"
+
+# Force load cycle clearance by unloading any existing active profile instances
+launchctl bootout gui/$(id -u) "$LAUNCH_AGENT_DIR/com.user.webmonitor.plist" 2>/dev/null
+
+# Dynamically construct the LaunchAgent file directly into system space
+cat << EOF > "$LAUNCH_AGENT_DIR/com.user.webmonitor.plist"
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.user.webmonitor</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>${TARGET_PYTHON}</string>
+        <string>${TARGET_DIR}/monitor.py</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>${TARGET_DIR}/output.log</string>
+    <key>StandardErrorPath</key>
+    <string>${TARGET_DIR}/error.log</string>
+</dict>
+</plist>
+EOF
+
+# Enforce secure macOS LaunchAgent file permissions
+chmod 644 "$LAUNCH_AGENT_DIR/com.user.webmonitor.plist"
+
+# Bootstrap and initialize the background engine layer immediately
+launchctl bootstrap gui/$(id -u) "$LAUNCH_AGENT_DIR/com.user.webmonitor.plist"
 
 echo -e "${GREEN}✔ Component directories structured and mapped successfully.${NC}"
 
