@@ -37,13 +37,23 @@ echo -e "${GREEN}✔ Python 3 Environment Found: $(which python3)${NC}"
 # 4. Verify SwiftBar UI presentation wrapper presence
 if ! open -Ra "SwiftBar" &> /dev/null; then
     echo -e "${YELLOW}⚠ Notice: SwiftBar app manager not detected in global spaces.${NC}"
-    if command -v brew &> /dev/null; then
-        echo "Homebrew environment detected. Attempting automated SwiftBar cask layout..."
-        brew install --cask swiftbar
-    else
-        echo -e "${RED}❌ Error: Please install SwiftBar manually (https://swiftbar.app) or install Homebrew.${NC}"
-        exit 1
+    
+    # If Homebrew is missing, install it automatically
+    if ! command -v brew &> /dev/null; then
+        echo -e "${YELLOW}📦 Homebrew not found. Installing Homebrew framework automatically...${NC}"
+        # Core non-interactive Homebrew installation string
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/null
+        
+        # Explicitly add Homebrew to the active path depending on architecture
+        if [[ "$(uname -m)" == "arm64" ]]; then
+            eval "$(/opt/homebrew/bin/brew shellenv)"
+        else
+            eval "$(/usr/local/bin/brew shellenv)"
+        fi
     fi
+
+    echo "Installing SwiftBar via Homebrew..."
+    brew install --cask swiftbar
 fi
 echo -e "${GREEN}✔ SwiftBar UI Handler Found.${NC}"
 
