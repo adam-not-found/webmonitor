@@ -104,42 +104,7 @@ echo -e "4. Ensure your terminal app is checked ${GREEN}ON${NC}."
 echo -e "${YELLOW}====================================================${NC}"
 read -p "Press [Enter] once you have verified these security assignments..."
 
-# --- AUTOMATED SWIFTBAR CONFIGURATION ---
-echo -e "\n${CYAN}[ Automating SwiftBar Configuration... ]${NC}"
-
-# Kill any stale instances safely
-pkill -x "SwiftBar" 2>/dev/null
-
-# Force-inject the plugins directory setting behind the scenes
-mkdir -p "$HOME/Library/Preferences"
-cat << EOF > /tmp/app.swiftbar.plist
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>pluginsFolder</key>
-    <string>$TARGET_DIR/plugins</string>
-</dict>
-</plist>
-EOF
-
-defaults import app.swiftbar /tmp/app.swiftbar.plist
-rm -f /tmp/app.swiftbar.plist
-killall cfprefsd 2>/dev/null
-
-# Attempt background launch (will require manual activation on first download)
-open -a "SwiftBar" 2>/dev/null
-echo -e "${GREEN}✔ SwiftBar configuration successfully mapped.${NC}"
-
-echo -e "\n${GREEN}🚀 CORE ENGINE COUPLING ROUTINE COMPLETE!${NC}"
-echo -e "${YELLOW}====================================================${NC}"
-echo -e " IMPORTANT NOTE FOR NEW USERS:"
-echo -e " After the setup wizard completes, if your owl (🦉) is missing:"
-echo -e " Press ${CYAN}Cmd + Space${NC}, type ${GREEN}SwiftBar${NC}, and hit Enter to launch it."
-echo -e "${YELLOW}====================================================${NC}"
-read -p "Press [Enter] to launch the Onboarding Configuration Wizard..."
-
-# Launch the Onboarding Profile Configuration Wizard to set credentials
+# Launch the Onboarding Profile Configuration Wizard directly
 echo -e "\n${CYAN}[ Starting Onboarding Profile Configuration Wizard... ]${NC}"
 clear
 bash "$TARGET_DIR/webmonitor.sh"
