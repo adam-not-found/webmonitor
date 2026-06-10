@@ -97,81 +97,64 @@ if len(sys.argv) > 1 and sys.argv[1] == "--alert":
 # ================= HEADLESS BACKGROUND LOOP =================
 
 def monitor_loop():
-    last_title = ""
-    last_typed = ""
+    last_text = ""
     last_trigger_context = ""
     
     while True:
         try:
             with open(CONFIG_PATH, 'r') as f: config = json.load(f)
             
+            # Universal AppleScript to grab text from whatever UI element currently has keyboard focus
             ascript = '''
-            tell application "Safari"
-                if it is running and (count windows) > 0 then
-                    tell front window to tell current tab
-                        set theTitle to name
-                        set theURL to URL
-                        set theTyped to ""
-                        try
-                            tell application "System Events" to tell process "Safari"
-                                set focusedElement to value of attribute "AXFocusedUIElement"
-                                set theTyped to value of focusedElement as string
-                            end tell
-                        end try
-                        return theTitle & "||" & theURL & "||" & theTyped
+            try
+                tell application "System Events"
+                    set frontProcess to first application process whose frontmost is true
+                    tell frontProcess
+                        set focusedElement to value of attribute "AXFocusedUIElement"
+                        if class of focusedElement is text field or class of focusedElement is text area then
+                            return value of focusedElement as string
+                        else if exists (value of attribute "AXFocusedUIElement") then
+                            return value of attribute "AXFocusedUIElement" as string
+                        end if
                     end tell
-                else
-                    return ""
-                end if
-            end tell
+                end tell
+            on error
+                return ""
+            end try
             '''
             
-            out_raw = subprocess.check_output(['osascript', '-e', ascript]).decode().strip()
-            if not out_raw:
-                time.sleep(3)
+            typed_text = subprocess.check_output(['osascript', '-e', ascript]).decode().strip()
+            
+            # Skip empty evaluations
+            if not typed_text or len(typed_text) < 3:
+                time.sleep(1.5)
                 continue
                 
-            parts = out_raw.split("||")
-            title, url, typed_text = parts[0], parts[1], parts[2] if len(parts) > 2 else ""
-
-            is_new_page = title != last_title
-            is_new_typing = typed_text != last_typed and typed_text != ""
-            
-            if is_new_page or is_new_typing:
-                last_title = title
-                last_typed = typed_text
+            if typed_text != last_text:
+                last_text = typed_text
                 
-                is_whitelisted = any(clean(s).lower() in url.lower() for s in config.get('whitelist', []))
-                
-                if not is_whitelisted:
-                    for word in config.get('trigger_words', []):
-                        clean_w = clean(word).lower()
-                        pattern = r'\b' + re.escape(clean_w) + r'\b'
+                for word in config.get('trigger_words', []):
+                    clean_w = clean(word).lower()
+                    pattern = r'\b' + re.escape(clean_w) + r'\b'
+                    
+                    if re.search(pattern, typed_text.lower()):
+                        current_context = f"{clean_w}|{typed_text}"
                         
-                        found_in_title = re.search(pattern, title.lower())
-                        found_in_url = re.search(pattern, url.lower())
-                        
-                        found_in_typing = False
-                        if typed_text:
-                            found_in_typing = re.search(pattern, typed_text.lower())
-                        
-                        if found_in_title or found_in_url or found_in_typing:
-                            current_context = f"{clean_w}|{url if not found_in_typing else typed_text}"
+                        if current_context != last_trigger_context:
+                            last_trigger_context = current_context
                             
-                            if current_context != last_trigger_context:
-                                last_trigger_context = current_context
-                                
-                                loc = "Title/URL" if (found_in_title or found_in_url) else "Typed Text"
-                                os.system(f'osascript -e \'display notification "Trigger: {word}" with title "🛡️ WebMonitor"\'')
-                                handle_event("word_found", f"Trigger Word: {word}\nLocation: {loc}\nPage: {title}\nURL: {url}\nInput: {typed_text}")
-                            break
-                else:
-                    last_trigger_context = ""
-            
+                            # Grab the name of the active app for the email alert context
+                            app_script = 'tell application "System Events" to get name of first application process whose frontmost is true'
+                            active_app = subprocess.check_output(['osascript', '-e', app_script]).decode().strip()
+                            
+                            os.system(f'osascript -e \'display notification "Trigger: {word} in {active_app}" with title "🛡️ WebMonitor"\'')
+                            handle_event("word_found", f"Trigger Word: {word}\nApplication: {active_app}\nCaptured Context: {typed_text}")
+                        break
+                        
         except Exception:
             pass
             
-        time.sleep(3)
+        time.sleep(1.5)  # Slightly faster response time for active typing fields
 
 if __name__ == "__main__":
     monitor_loop()
