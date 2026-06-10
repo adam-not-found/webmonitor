@@ -1,5 +1,7 @@
 #!/bin/bash
 
+cd "$(dirname "$0")"
+
 # Visual Color Variables
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'
