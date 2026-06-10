@@ -107,23 +107,31 @@ read -p "Press [Enter] once you have verified these security assignments..."
 # --- AUTOMATED SWIFTBAR CONFIGURATION ---
 echo -e "\n${CYAN}[ Automating SwiftBar Configuration... ]${NC}"
 
-# Kill any running instances of SwiftBar to safely update preferences
+# 1. Kill any stale SwiftBar instances safely
 pkill -x "SwiftBar" 2>/dev/null
 
-# Force SwiftBar to use your specific directory without prompting the user
-defaults write app.swiftbar pluginsFolder "$TARGET_DIR/plugins"
+# 2. Force-inject the preferences directly into the macOS defaults system
+mkdir -p "$HOME/Library/Preferences"
+cat << EOF > /tmp/app.swiftbar.plist
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>pluginsFolder</key>
+    <string>$TARGET_DIR/plugins</string>
+</dict>
+</plist>
+EOF
 
-# Tell macOS to register the preference change instantly
+defaults import app.swiftbar /tmp/app.swiftbar.plist
+rm -f /tmp/app.swiftbar.plist
+
+# 3. Force macOS to instantly commit the new preferences to disk
 killall cfprefsd 2>/dev/null
 
-# Open SwiftBar silently in the background
-open -a "SwiftBar" --args --background
+# 4. Explicitly launch the binary directly to bypass first-open prompts
+if [ -d "/Applications/SwiftBar.app" ]; then
+    /Applications/SwiftBar.app/Contents/MacOS/SwiftBar --background &
+fi
 
-echo -e "${GREEN}✔ SwiftBar automatically configured to read your plugins directory.${NC}"
-
-# Launch the Onboarding Profile Configuration Wizard to set credentials
-echo -e "\n${CYAN}[ Starting Onboarding Profile Configuration Wizard... ]${NC}"
-clear
-bash "$TARGET_DIR/webmonitor.sh"
-
-echo -e "\n${GREEN}🚀 INSTALLATION COMPLETE! Everything is running silently in the background.${NC}"
+echo -e "${GREEN}✔ SwiftBar configuration successfully forced and initialized.${NC}"
