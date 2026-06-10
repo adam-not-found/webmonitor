@@ -27,31 +27,43 @@ else
     BREW_PYTHON="/usr/local/bin/python3"
 fi
 
-# 3. Verify Python 3 presence
+# 3. Verify Python 3 & Command Line Tools Presence
+if ! xcode-select -p &>/dev/null; then
+    echo -e "${YELLOW}📦 macOS Command Line Tools missing. Triggering automated installation...${NC}"
+    touch /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
+    PROD=$(softwareupdate -l | grep "\*.*Command Line" | head -n 1 | awk -F"*" '{print $2}' | sed -e 's/^ *//' | tr -d '\n')
+    if [ -n "$PROD" ]; then
+        softwareupdate -i "$PROD" --verbose
+    else
+        echo -e "${RED}❌ Please click 'Install' on the macOS popup to continue, then re-run this script.${NC}"
+        exit 1
+    fi
+    rm -f /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
+fi
+
 if ! command -v python3 &> /dev/null; then
-    echo -e "${RED}❌ Error: Python 3 core interpreter missing. Install via Xcode or Homebrew.${NC}"
+    echo -e "${RED}❌ Error: Python 3 core interpreter missing.${NC}"
     exit 1
 fi
-echo -e "${GREEN}✔ Python 3 Environment Found: $(which python3)${NC}"
+echo -e "${GREEN}✔ Python 3 Environment Found.${NC}"
+
+# Ensure required Python networking libraries are installed globally/locally
+echo "Checking Python library dependencies..."
+python3 -m pip install --upgrade pip &>/dev/null
+python3 -m pip install requests secure-smtplib &>/dev/null
 
 # 4. Verify SwiftBar UI presentation wrapper presence
 if ! open -Ra "SwiftBar" &> /dev/null; then
     echo -e "${YELLOW}⚠ Notice: SwiftBar app manager not detected in global spaces.${NC}"
-    
-    # If Homebrew is missing, install it automatically
     if ! command -v brew &> /dev/null; then
         echo -e "${YELLOW}📦 Homebrew not found. Installing Homebrew framework automatically...${NC}"
-        # Core non-interactive Homebrew installation string
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/null
-        
-        # Explicitly add Homebrew to the active path depending on architecture
         if [[ "$(uname -m)" == "arm64" ]]; then
             eval "$(/opt/homebrew/bin/brew shellenv)"
         else
             eval "$(/usr/local/bin/brew shellenv)"
         fi
     fi
-
     echo "Installing SwiftBar via Homebrew..."
     brew install --cask swiftbar
 fi
