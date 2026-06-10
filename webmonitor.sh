@@ -1,5 +1,6 @@
 #!/bin/bash
 clear
+
 # Color Palette
 BLUE='\033[0;34m'
 GREEN='\033[0;32m'
@@ -11,6 +12,7 @@ WHITE='\033[1;37m'
 NC='\033[0m' # No Color
 
 CONFIG="$HOME/.webmonitor/config.json"
+PLIST_PATH="$HOME/Library/LaunchAgents/com.user.webmonitor.plist"
 
 get_val() { python3 -c "import json; print(json.load(open('$CONFIG'))['$1'])" 2>/dev/null; }
 save_val() { python3 -c "import json; d=json.load(open('$CONFIG')); d['$1']=$2; json.dump(d, open('$CONFIG', 'w'), indent=4)" ; }
@@ -20,11 +22,11 @@ if [ ! -f "$CONFIG" ] || [ "$(get_val sender_email)" == "" ] || [ "$(get_val sen
     echo -e "${CYAN}🛡️  WEBMONITOR FIRST-TIME SETUP${NC}"
     echo "=================================="
     mkdir -p "$HOME/.webmonitor"
-    echo '{"sender_email":"","app_password":"","recipient_email":"","cc_email":"","whitelist":[],"trigger_words":[],"alerts":{"word_found":true,"added_trigger_words":false,"removed_trigger_words":true,"added_whitelist":true,"removed_whitelist":false,"service_restarted":true,"service_stopped":true,"recipient_changed":true}}' > "$CONFIG"
+    echo '{"menu_bar_icon": "🦉", "sender_email":"","app_password":"","recipient_email":"","cc_email":"","whitelist":[],"trigger_words":[],"alerts":{"word_found":true,"added_trigger_words":true,"removed_trigger_words":true,"added_whitelist":true,"removed_whitelist":true,"service_restarted":true,"service_stopped":true,"recipient_changed":true}}' > "$CONFIG"
     
     # 1. RECIPIENT
     echo -e "\n${PURPLE}Step 1: The 'Recipient' Account${NC}"
-    echo "This is the person who will receive the alerts (partner/parent)."
+    echo "This is the person who will receive the alerts."
     read -p "Enter Recipient Email: " n_rec
     save_val "recipient_email" "'$n_rec'"
     
@@ -35,11 +37,12 @@ if [ ! -f "$CONFIG" ] || [ "$(get_val sender_email)" == "" ] || [ "$(get_val sen
     while true; do
         read -p "Enter SENDER Gmail: " n_snd
         echo "1. Go to: https://myaccount.google.com/apppasswords"
-        echo "2. Create a name like 'WebMonitor'."
+        echo "2. Create an App Password named 'WebMonitor'."
         echo "3. Copy the 16-character code."
         read -p "Enter App Password: " n_pw
         n_pw=$(echo $n_pw | tr -d ' ')
-        if python3 monitor.py --test-creds "$n_snd" "$n_pw" "$n_rec"; then
+        
+        if python3 "$HOME/.webmonitor/monitor.py" --test-creds "$n_snd" "$n_pw" "$n_rec"; then
             save_val "sender_email" "'$n_snd'"; save_val "app_password" "'$n_pw'"
             
             echo -e "\n${CYAN}Step 3: Visibility${NC}"
@@ -47,38 +50,23 @@ if [ ! -f "$CONFIG" ] || [ "$(get_val sender_email)" == "" ] || [ "$(get_val sen
             [[ "$n_cc" =~ ^[Yy]$ ]] && save_val "cc_email" "'$n_snd'"
             break
         else
-            echo -e "${RED}❌ Connection Failed. Check 2FA and App Password.${NC}"
+            echo -e "${RED}❌ Connection Failed. Check your App Password configuration.${NC}"
         fi
     done
 
-    # 3. LISTS (COLOR CODED)
-    # Triggers in RED
-    while true; do
-        echo -e "\n${RED}Step 4: Restricted Keywords (Type '0' to finish):${NC}"
-        read -p "> " item
-        [[ "$item" == "0" ]] && break
-        python3 -c "import json; d=json.load(open('$CONFIG')); d['trigger_words'].append('$item'); json.dump(d, open('$CONFIG', 'w'), indent=4)"
-    done
-
-    # Whitelist in GREEN
-    while true; do
-        echo -e "\n${GREEN}Step 5: Whitelisted Sites (Type '0' to finish):${NC}"
-        read -p "> " item
-        [[ "$item" == "0" ]] && break
-        python3 -c "import json; d=json.load(open('$CONFIG')); d['whitelist'].append('$item'); json.dump(d, open('$CONFIG', 'w'), indent=4)"
-    done
-
-    echo -e "\n${GREEN}✅ SETUP COMPLETE! Launching Dashboard...${NC}"
-    pkill -f monitor.py; nohup python3 monitor.py >> "$HOME/.webmonitor/log.txt" 2>&1 &
+    echo -e "\n${GREEN}✅ SETUP COMPLETE! Launching Service Layer...${NC}"
+    launchctl bootstrap gui/$(id -u) "$PLIST_PATH" 2>/dev/null
 fi
 
 # --- FULL DASHBOARD ---
 manage_list() {
     local key=$1; local name=$2
+    local toggle_add="added_$key"
+    local toggle_rm="removed_$key"
+    
     while true; do
         echo -e "\n${BLUE}--- MANAGE $name ---${NC}"
-        # Fetch current items and sort them for display
-        items=($(python3 -c "import json; d=json.load(open('$CONFIG')); print(' '.join(sorted(d['$key'])))"))
+        items=($(python3 -c "import json; d=json.load(open('$CONFIG')); print(' '.join(sorted(d['$key'])))" 2>/dev/null))
         for i in "${!items[@]}"; do echo "$((i+1))) ${items[$i]}"; done
         
         echo -e "\nA) Add Multiple  R) Remove Multiple  0) Back"
@@ -90,12 +78,11 @@ manage_list() {
                    read -p "> " val
                    [[ "$val" == "0" ]] && break
                    python3 -c "import json; d=json.load(open('$CONFIG')); d['$key'].append('$val'); json.dump(d, open('$CONFIG', 'w'), indent=4)"
-                   python3 monitor.py --alert "settings_adjusted" "You added '$val' to the $name list." "" "added_$key"
+                   python3 "$HOME/.webmonitor/monitor.py" --alert "settings_adjusted" "You added '$val' to the $name list." "" "$toggle_add"
                done ;;
             [Rr]*)
                while true; do
-                   # Refresh list inside the loop so numbers stay accurate as you delete
-                   items=($(python3 -c "import json; d=json.load(open('$CONFIG')); print(' '.join(sorted(d['$key'])))"))
+                   items=($(python3 -c "import json; d=json.load(open('$CONFIG')); print(' '.join(sorted(d['$key'])))" 2>/dev/null))
                    echo -e "${RED}Removing $name (Type '0' to stop)${NC}"
                    for i in "${!items[@]}"; do echo "$((i+1))) ${items[$i]}"; done
                    read -p "Enter number: " num
@@ -105,10 +92,10 @@ manage_list() {
                    item_to_rm=${items[$idx]}
                    if [[ -n "$item_to_rm" ]]; then
                        python3 -c "import json; d=json.load(open('$CONFIG')); d['$key'].remove('$item_to_rm'); json.dump(d, open('$CONFIG', 'w'), indent=4)"
-                       python3 monitor.py --alert "settings_adjusted" "You removed '$item_to_rm' from the $name list." "" "removed_$key"
+                       python3 "$HOME/.webmonitor/monitor.py" --alert "settings_adjusted" "You removed '$item_to_rm' from the $name list." "" "$toggle_rm"
                        echo -e "Removed: $item_to_rm"
                    else
-                       echo -e "Invalid number."
+                       echo -e "Invalid selection."
                    fi
                done ;;
             0) break ;;
@@ -125,8 +112,7 @@ while true; do
     echo "5) Stop & Uninstall Options"
     read -p "Select option: " opt
     case $opt in
-        1) # ... [Settings Logic] ...
-           while true; do
+        1) while true; do
             cc_status="OFF"; [[ -n "$(get_val cc_email)" ]] && cc_status="ON"
             echo -e "\n${YELLOW}--- EMAIL SETTINGS ---${NC}"
             echo "1) Sender:    $(get_val sender_email)"
@@ -136,13 +122,15 @@ while true; do
             read -p "Selection: " e_opt
             case $e_opt in
                 1) read -p "New Sender: " n_em; read -p "New PW: " n_pw
-                   if python3 monitor.py --test-creds "$n_em" "$n_pw" "$(get_val recipient_email)"; then
+                   if python3 "$HOME/.webmonitor/monitor.py" --test-creds "$n_em" "$n_pw" "$(get_val recipient_email)"; then
                        save_val "sender_email" "'$n_em'"; save_val "app_password" "'$n_pw'"
                    fi ;;
                 2) old_r=$(get_val recipient_email); read -p "New Recipient: " n_r
-                   save_val "recipient_email" "'$n_r'"; python3 monitor.py --alert "recipient_changed" "$n_r" "$old_r" ;;
+                   save_val "recipient_email" "'$n_r'"
+                   python3 "$HOME/.webmonitor/monitor.py" --alert "recipient_changed" "$n_r" "$old_r" ;;
                 3) read -p "Enable CC? (y/n): " confirm; new_cc=""; [[ "$confirm" =~ ^[Yy]$ ]] && new_cc="$(get_val sender_email)"
-                   save_val "cc_email" "'$new_cc'"; python3 monitor.py --alert "settings_adjusted" "CC Mode changed." ;;
+                   save_val "cc_email" "'$new_cc'"
+                   python3 "$HOME/.webmonitor/monitor.py" --alert "settings_adjusted" "CC Mode modified." ;;
                 0) break ;;
             esac
            done ;;
@@ -159,16 +147,21 @@ while true; do
             [[ "$t_opt" == "0" ]] && break
             key=$(python3 -c "import json; d=json.load(open('$CONFIG')); keys=[k for k in d['alerts'].keys() if k != 'settings_adjusted']; print(keys[$t_opt-1])")
             status=$(python3 -c "import json; d=json.load(open('$CONFIG')); d['alerts']['$key']=not d['alerts']['$key']; json.dump(d, open('$CONFIG', 'w'), indent=4); print('ON' if d['alerts']['$key'] else 'OFF')")
-            python3 monitor.py --alert "settings_adjusted" "Alert toggle '$key' changed to: $status"
+            python3 "$HOME/.webmonitor/monitor.py" --alert "settings_adjusted" "Alert toggle '$key' changed to: $status"
            done ;;
-        4) pkill -f monitor.py; nohup python3 monitor.py >> "$HOME/.webmonitor/log.txt" 2>&1 &
-           sleep 1; python3 monitor.py --alert "service_restarted"
-           echo -e "${GREEN}✅ Engine Restarted.${NC}" ;;
+        4) echo -e "${YELLOW}Cycling native daemon service...${NC}"
+           launchctl bootout gui/$(id -u) "$PLIST_PATH" 2>/dev/null
+           sleep 1
+           launchctl bootstrap gui/$(id -u) "$PLIST_PATH"
+           python3 "$HOME/.webmonitor/monitor.py" --alert "service_restarted"
+           echo -e "${GREEN}✅ Engine Successfully Restarted.${NC}" ;;
         5) read -p "⚠️ ARE YOU SURE? This will stop the monitor and delete all settings. (y/n): " confirm
            if [[ "$confirm" =~ ^[Yy]$ ]]; then
-               python3 monitor.py --alert "service_stopped" "The user has initiated a full uninstallation."
-               pkill -f monitor.py; crontab -r 2>/dev/null; cd ~ && rm -rf "$HOME/.webmonitor"
-               echo -e "${RED}🛑 Uninstalled. Folder deleted.${NC}"
+               python3 "$HOME/.webmonitor/monitor.py" --alert "service_stopped" "The user has initiated a full uninstallation."
+               launchctl bootout gui/$(id -u) "$PLIST_PATH" 2>/dev/null
+               rm -f "$PLIST_PATH"
+               rm -rf "$HOME/.webmonitor"
+               echo -e "${RED}🛑 Engine stopped and local assets removed.${NC}"
                exit
            fi ;;
     esac
