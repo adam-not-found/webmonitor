@@ -127,18 +127,19 @@ defaults import app.swiftbar /tmp/app.swiftbar.plist
 rm -f /tmp/app.swiftbar.plist
 killall cfprefsd 2>/dev/null
 
-# Try launching it, but provide a manual fallback prompt for macOS gatekeepers
+# Attempt background launch (will require manual activation on first download)
 open -a "SwiftBar" 2>/dev/null
-
 echo -e "${GREEN}✔ SwiftBar configuration successfully mapped.${NC}"
+
+echo -e "\n${GREEN}🚀 CORE ENGINE COUPLING ROUTINE COMPLETE!${NC}"
+echo -e "${YELLOW}====================================================${NC}"
+echo -e " IMPORTANT NOTE FOR NEW USERS:"
+echo -e " After the setup wizard completes, if your owl (🦉) is missing:"
+echo -e " Press ${CYAN}Cmd + Space${NC}, type ${GREEN}SwiftBar${NC}, and hit Enter to launch it."
+echo -e "${YELLOW}====================================================${NC}"
+read -p "Press [Enter] to launch the Onboarding Configuration Wizard..."
 
 # Launch the Onboarding Profile Configuration Wizard to set credentials
 echo -e "\n${CYAN}[ Starting Onboarding Profile Configuration Wizard... ]${NC}"
 clear
 bash "$TARGET_DIR/webmonitor.sh"
-
-echo -e "\n${GREEN}🚀 INSTALLATION COMPLETE!${NC}"
-echo -e "${YELLOW}====================================================${NC}"
-echo -e " FINAL STEP: Press ${CYAN}Cmd + Space${NC}, type ${GREEN}SwiftBar${NC}, and hit Enter."
-echo -e " This bypasses macOS security and loads your ${WHITE}owl (🦉)${NC} instantly!"
-echo -e "${YELLOW}====================================================${NC}\n"
