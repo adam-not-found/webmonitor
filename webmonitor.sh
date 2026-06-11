@@ -28,7 +28,7 @@ if [ ! -f "$CONFIG" ] || [ "$(get_val sender_email)" == "" ] || [ "$(get_val sen
     echo -e "${CYAN}🛡️  WEBMONITOR FIRST-TIME SETUP${NC}"
     echo "=================================="
     mkdir -p "$HOME/.webmonitor"
-    echo '{"menu_bar_icon": "🦉", "sender_email":"","app_password":"","recipient_email":"","cc_email":"","whitelist":[],"trigger_words":[],"alerts":{"word_found":true,"added_trigger_words":false,"removed_trigger_words":true,"added_whitelist":true,"removed_whitelist":true}}' > "$CONFIG"
+    echo '{"menu_bar_icon": "🦉", "sender_email":"","app_password":"","recipient_email":"","cc_email":"","whitelist":[],"trigger_words":[],"alerts":{"word_found":true,"added_trigger_words":false,"removed_trigger_words":true,"added_whitelist":true,"removed_whitelist":false}}' > "$CONFIG"
 
     # Step 1: Emails
     read -p "Enter Sender Gmail: " s_email
@@ -130,12 +130,23 @@ while true; do
             ;;
         2)
             echo -e "\n${CYAN}[ Trigger Words & Whitelist ]${NC}"
-            echo "1) Add Trigger Word(s)"
-            echo "2) Remove Trigger Word"
-            echo "3) Add Whitelist Domain"
-            echo "4) Remove Whitelist Domain"
-            read -p "Choose sub-option (1-4): " sub_opt
-            if [ "$sub_opt" == "1" ]; then
+            echo "0) Go Back"
+            echo "1) View Lists"
+            echo "2) Add Trigger Word(s)"
+            echo "3) Remove Trigger Word (by number)"
+            echo "4) Add Whitelist Domain"
+            echo "5) Remove Whitelist Domain (by number)"
+            read -p "Choose sub-option (0-5): " sub_opt
+            
+            if [ "$sub_opt" == "0" ]; then
+                continue
+            elif [ "$sub_opt" == "1" ]; then
+                echo -e "\n${YELLOW}Trigger Words:${NC}"
+                python3 -c "import json; [print(f'{i+1}) {w}') for i,w in enumerate(json.load(open('$CONFIG'))['trigger_words'])]"
+                echo -e "\n${YELLOW}Whitelist:${NC}"
+                python3 -c "import json; [print(f'{i+1}) {w}') for i,w in enumerate(json.load(open('$CONFIG'))['whitelist'])]"
+                read -p "Press [Enter] to return..."
+            elif [ "$sub_opt" == "2" ]; then
                 echo "Enter words to add (type '0' when finished):"
                 while true; do
                     read -p "Word: " new_word
@@ -143,18 +154,28 @@ while true; do
                     python3 -c "import json; d=json.load(open('$CONFIG')); d['trigger_words'].append('$new_word') if '$new_word' not in d['trigger_words'] else None; json.dump(d, open('$CONFIG', 'w'), indent=4)"
                 done
                 python3 "$HOME/.webmonitor/monitor.py" --alert "added_trigger_words" 2>/dev/null
-            elif [ "$sub_opt" == "2" ]; then
-                read -p "Enter word to remove: " rem_word
-                python3 -c "import json; d=json.load(open('$CONFIG')); d['trigger_words'].remove('$rem_word') if '$rem_word' in d['trigger_words'] else None; json.dump(d, open('$CONFIG', 'w'), indent=4)"
-                python3 "$HOME/.webmonitor/monitor.py" --alert "removed_trigger_words" 2>/dev/null
             elif [ "$sub_opt" == "3" ]; then
-                read -p "Enter domain to whitelist (e.g. google.com): " wl_dom
-                python3 -c "import json; d=json.load(open('$CONFIG')); d['whitelist'].append('$wl_dom') if '$wl_dom' not in d['whitelist'] else None; json.dump(d, open('$CONFIG', 'w'), indent=4)"
+                echo -e "\n${YELLOW}Trigger Words:${NC}"
+                python3 -c "import json; [print(f'{i+1}) {w}') for i,w in enumerate(json.load(open('$CONFIG'))['trigger_words'])]"
+                read -p "Enter number to remove (or 0 to cancel): " rem_num
+                if [ "$rem_num" != "0" ] && [[ "$rem_num" =~ ^[0-9]+$ ]]; then
+                    python3 -c "import json; d=json.load(open('$CONFIG')); w=d['trigger_words']; val=w[$rem_num-1] if 0<=$rem_num-1<len(w) else None; w.remove(val) if val else None; json.dump(d, open('$CONFIG', 'w'), indent=4) if val else None"
+                    python3 "$HOME/.webmonitor/monitor.py" --alert "removed_trigger_words" 2>/dev/null
+                fi
             elif [ "$sub_opt" == "4" ]; then
-                read -p "Enter domain to remove from whitelist: " rem_dom
-                python3 -c "import json; d=json.load(open('$CONFIG')); d['whitelist'].remove('$rem_dom') if '$rem_dom' in d['whitelist'] else None; json.dump(d, open('$CONFIG', 'w'), indent=4)"
+                read -p "Enter domain to whitelist (or 0 to cancel): " wl_dom
+                if [ "$wl_dom" != "0" ]; then
+                    python3 -c "import json; d=json.load(open('$CONFIG')); d['whitelist'].append('$wl_dom') if '$wl_dom' not in d['whitelist'] else None; json.dump(d, open('$CONFIG', 'w'), indent=4)"
+                fi
+            elif [ "$sub_opt" == "5" ]; then
+                echo -e "\n${YELLOW}Whitelist:${NC}"
+                python3 -c "import json; [print(f'{i+1}) {w}') for i,w in enumerate(json.load(open('$CONFIG'))['whitelist'])]"
+                read -p "Enter number to remove (or 0 to cancel): " rem_num
+                if [ "$rem_num" != "0" ] && [[ "$rem_num" =~ ^[0-9]+$ ]]; then
+                    python3 -c "import json; d=json.load(open('$CONFIG')); w=d['whitelist']; val=w[$rem_num-1] if 0<=$rem_num-1<len(w) else None; w.remove(val) if val else None; json.dump(d, open('$CONFIG', 'w'), indent=4) if val else None"
+                fi
             fi
-            echo -e "${GREEN}✅ Word/Whitelist updates complete.${NC}"
+            echo -e "${GREEN}✅ Update complete.${NC}"
             sleep 2
             ;;
         3)
