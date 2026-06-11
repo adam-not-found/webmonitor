@@ -54,12 +54,18 @@ if [ ! -f "$CONFIG" ] || [ "$(get_val sender_email)" == "" ] || [ "$(get_val sen
         fi
     done
 
-    echo -e "\n${GREEN}✅ SETUP COMPLETE! Launching Service Layer...${NC}"
-    launchctl bootstrap gui/$(id -u) "$PLIST_PATH" 2>/dev/null
-
-    # --- SWIFTBAR FIRST-LAUNCH ACTIVATION ---
-    echo -e "\n${CYAN}[ Finalizing SwiftBar Automation... ]${NC}"
-    pkill -x "SwiftBar" 2>/dev/null
+    echo -e "${GREEN}✅ First-time setup complete!${NC}"
+        
+        # Automatically bootstrap the engine with the fresh config
+        echo -e "${YELLOW}Initializing daemon with new configuration...${NC}"
+        launchctl bootout gui/$(id -u) "$PLIST_PATH" 2>/dev/null
+        sleep 1.5
+        launchctl bootstrap gui/$(id -u) "$PLIST_PATH"
+        open -g "swiftbar://refreshall"
+    fi
+        # --- SWIFTBAR FIRST-LAUNCH ACTIVATION ---
+        echo -e "\n${CYAN}[ Finalizing SwiftBar Automation... ]${NC}"
+        pkill -x "SwiftBar" 2>/dev/null
     
     # Inject preferences directly
     mkdir -p "$HOME/Library/Preferences"
