@@ -22,6 +22,14 @@ if [[ "$OSTYPE" != "darwin"* ]]; then
 fi
 echo -e "${GREEN}✔ Environment Platform Match: macOS (${OSTYPE})${NC}"
 
+# ====================================================================
+# CRITICAL FIX: Define Python Path FIRST before using it
+# ====================================================================
+TARGET_PYTHON=$(which python3)
+if [[ "$TARGET_PYTHON" == "/usr/bin/python3" ]] && [ -f "/Library/Frameworks/Python.framework/Versions/Current/bin/python3" ]; then
+    TARGET_PYTHON="/Library/Frameworks/Python.framework/Versions/Current/bin/python3"
+fi
+
 # 2. Check architecture target to locate Homebrew framework binary strings
 if [[ "$(uname -m)" == "arm64" ]]; then
     BREW_PYTHON="/opt/homebrew/bin/python3"
@@ -49,18 +57,9 @@ if ! command -v python3 &> /dev/null; then
 fi
 echo -e "${GREEN}✔ Python 3 Environment Found.${NC}"
 
-# ====================================================================
-# FAILSAFE: Move Dynamic Path Discovery Here (Before Pip Commands)
-# ====================================================================
-TARGET_PYTHON=$(which python3)
-if [[ "$TARGET_PYTHON" == "/usr/bin/python3" ]] && [ -f "/Library/Frameworks/Python.framework/Versions/Current/bin/python3" ]; then
-    TARGET_PYTHON="/Library/Frameworks/Python.framework/Versions/Current/bin/python3"
-fi
-
 # Ensure required Python networking libraries are installed globally/locally
 echo "Checking Python library dependencies..."
 $TARGET_PYTHON -m pip install --upgrade pip &>/dev/null
-# Force installation directly to the target verified python framework space
 $TARGET_PYTHON -m pip install --break-system-packages requests secure-smtplib &>/dev/null
 
 # 4. Verify SwiftBar UI presentation wrapper presence
@@ -112,14 +111,6 @@ echo "Open Dashboard | bash='$HOME/.webmonitor/webmonitor.sh' terminal=true"
 EOF
 chmod +x "$PLUGIN_DIR/webmonitor.3s.sh"
 
-# Dynamically locate the active Python 3 framework binary path executing this script
-TARGET_PYTHON=$(which python3)
-
-# Failsafe check to prioritize standard frameworks if sitting on a restricted system stub
-if [[ "$TARGET_PYTHON" == "/usr/bin/python3" ]] && [ -f "/Library/Frameworks/Python.framework/Versions/Current/bin/python3" ]; then
-    TARGET_PYTHON="/Library/Frameworks/Python.framework/Versions/Current/bin/python3"
-fi
-
 echo "Mapping background daemon execution layer to: $TARGET_PYTHON"
 
 # Force load cycle clearance by unloading any existing active profile instances
@@ -164,11 +155,11 @@ echo -e "${YELLOW}      CRITICAL REQUIRED ACTIONS (OS SECURITY)      ${NC}"
 echo -e "${YELLOW}====================================================${NC}"
 echo -e "Because WebMonitor analyzes input strings across systemic environments,"
 echo -e "you MUST grant permissions to the core running terminal binary."
-echo -e "\n1. Navigate to: ${CYAN}System Settings > Privacy & Security > Accessibility${NC}"
-echo -e "2. Ensure your terminal app (${CYAN}Terminal${NC} or ${CYAN}iTerm2${NC}) is checked ${GREEN}ON${NC}."
-echo -e "\n3. Navigate to: ${CYAN}System Settings > Privacy & Security > Screen Recording${NC}"
-echo -e "4. Ensure your terminal app is checked ${GREEN}ON${NC}."
-echo -e "${YELLOW}====================================================${NC}"
+echo -e "\n1. Navigate to: System Settings > Privacy & Security > Accessibility"
+echo -e "2. Ensure your terminal app (Terminal or iTerm2) is checked ON."
+echo -e "\n3. Navigate to: System Settings > Privacy & Security > Screen Recording"
+echo -e "4. Ensure your terminal app is checked ON."
+echo -e "===================================================="
 read -p "Press [Enter] once you have verified these security assignments..."
 
 # Launch the Onboarding Profile Configuration Wizard directly
