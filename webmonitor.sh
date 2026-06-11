@@ -178,22 +178,50 @@ while true; do
             python3 "$HOME/.webmonitor/monitor.py" --alert "settings_adjusted" "Alert toggle '$key' changed to: $status"
            done ;;
         4) echo -e "${YELLOW}Cycling native daemon service...${NC}"
-           # 1. Force fully bootout the current daemon registration state to clear the launchd slot
+           # 1. Ensure the LaunchAgents directory physically exists (critical for fresh Macs)
+           mkdir -p "$(dirname "$PLIST_PATH")"
+           
+           # 2. Dynamically locate the correct Python interpreter path
+           TARGET_PYTHON=$(which python3)
+           if [[ "$TARGET_PYTHON" == "/usr/bin/python3" ]] && [ -f "/Library/Frameworks/Python.framework/Versions/Current/bin/python3" ]; then
+               TARGET_PYTHON="/Library/Frameworks/Python.framework/Versions/Current/bin/python3"
+           fi
+
+           # 3. Dynamically build/refresh the plist file to guarantee it exists and is accurate
+           cat << EOF > "$PLIST_PATH"
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.user.webmonitor</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$TARGET_PYTHON</string>
+        <string>${HOME}/.webmonitor/monitor.py</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>${HOME}/.webmonitor/output.log</string>
+    <key>StandardErrorPath</key>
+    <string>${HOME}/.webmonitor/error.log</string>
+</dict>
+</plist>
+EOF
+           chmod 644 "$PLIST_PATH"
+
+           # 4. Cleanly cycle the launchd engine slot
            launchctl bootout gui/$(id -u) "$PLIST_PATH" 2>/dev/null
-           
-           # 2. Give macOS a brief window to flush the process memory map
            sleep 1.5
-           
-           # 3. Cleanly bootstrap the service into memory
            launchctl bootstrap gui/$(id -u) "$PLIST_PATH"
            
-           # 4. Extract the verified Python path directly from the active plist to prevent dependency module gaps
-           LOCAL_PYTHON=$(grep -A 1 "<key>ProgramArguments</key>" "$PLIST_PATH" | grep "<string>" | head -n 1 | sed -E 's/<\/?string>//g' | xargs)
-           if [ -z "$LOCAL_PYTHON" ]; then LOCAL_PYTHON="python3"; fi
-           
-           # 5. Fire the telemetry alert using the absolute target path
-           $LOCAL_PYTHON "$HOME/.webmonitor/monitor.py" --alert "service_restarted"
+           # 5. Fire telemetry alert using the matching executable context
+           $TARGET_PYTHON "$HOME/.webmonitor/monitor.py" --alert "service_restarted"
            echo -e "${GREEN}✅ Engine Successfully Restarted.${NC}" ;;
+           
         5) read -p "⚠️ ARE YOU SURE? This will stop the monitor and delete all settings. (y/n): " confirm
            if [[ "$confirm" =~ ^[Yy]$ ]]; then
                python3 "$HOME/.webmonitor/monitor.py" --alert "service_stopped" "The user has initiated a full uninstallation."

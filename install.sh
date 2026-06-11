@@ -90,6 +90,8 @@ mkdir -p "$TARGET_DIR"
 mkdir -p "$PLUGIN_DIR"
 mkdir -p "$LAUNCH_AGENT_DIR"
 
+cat << EOF > "$LAUNCH_AGENT_DIR/com.user.webmonitor.plist"
+
 # Move executable files inside home deployment spaces
 cp monitor.py "$TARGET_DIR/monitor.py"
 cp webmonitor.sh "$TARGET_DIR/webmonitor.sh"
