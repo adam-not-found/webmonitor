@@ -182,13 +182,17 @@ while true; do
            launchctl bootout gui/$(id -u) "$PLIST_PATH" 2>/dev/null
            
            # 2. Give macOS a brief window to flush the process memory map
-           sleep 15
+           sleep 1.5
            
-           # 3. Cleanly bootstrap the service into memory (this guarantees no more 5: Input/output errors)
+           # 3. Cleanly bootstrap the service into memory
            launchctl bootstrap gui/$(id -u) "$PLIST_PATH"
            
-           # 4. Fire the internal telemetry alert notification
-           python3 "$HOME/.webmonitor/monitor.py" --alert "service_restarted"
+           # 4. Extract the verified Python path directly from the active plist to prevent dependency module gaps
+           LOCAL_PYTHON=$(grep -A 1 "<key>ProgramArguments</key>" "$PLIST_PATH" | grep "<string>" | head -n 1 | sed -E 's/<\/?string>//g' | xargs)
+           if [ -z "$LOCAL_PYTHON" ]; then LOCAL_PYTHON="python3"; fi
+           
+           # 5. Fire the telemetry alert using the absolute target path
+           $LOCAL_PYTHON "$HOME/.webmonitor/monitor.py" --alert "service_restarted"
            echo -e "${GREEN}✅ Engine Successfully Restarted.${NC}" ;;
         5) read -p "⚠️ ARE YOU SURE? This will stop the monitor and delete all settings. (y/n): " confirm
            if [[ "$confirm" =~ ^[Yy]$ ]]; then
