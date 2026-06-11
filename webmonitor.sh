@@ -2,12 +2,12 @@
 clear
 
 # Color Palette
-BLUE='\033;34m'
-GREEN='\033;32m'
-RED='\033;31m'
+BLUE='\033[0;34m'
+GREEN='\033[0;32m'
+RED='\033[0;31m'
 YELLOW='\033[1;33m'
-PURPLE='\033;35m'
-CYAN='\033;36m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
 WHITE='\033[1;37m'
 NC='\033[0m' # No Color
 
