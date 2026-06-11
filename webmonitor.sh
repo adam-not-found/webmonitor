@@ -108,85 +108,121 @@ while true; do
 
     case "$opt" in
         1)
-            echo -e "\n${CYAN}[ Email & Account Settings ]${NC}"
-            read -p "New Sender Gmail (leave blank to keep current): " s_email
-            if [ ! -z "$s_email" ]; then save_val "sender_email" "\"$s_email\""; fi
-            
-            read -p "New App Password (leave blank to keep current): " s_pass
-            if [ ! -z "$s_pass" ]; then save_val "app_password" "\"$s_pass\""; fi
-            
-            read -p "New Recipient Email (leave blank to keep current): " r_email
-            if [ ! -z "$r_email" ]; then save_val "recipient_email" "\"$r_email\""; fi
-            
-            read -p "CC yourself on all alerts? (y/n): " cc_choice
-            if [[ "$cc_choice" =~ ^[Yy]$ ]]; then
-                curr_sender=$(get_val sender_email)
-                save_val "cc_email" "\"$curr_sender\""
-            elif [[ "$cc_choice" =~ ^[Nn]$ ]]; then
-                save_val "cc_email" "\"\""
-            fi
-            echo -e "${GREEN}✅ Account settings updated.${NC}"
-            sleep 2
+            while true; do
+                clear
+                echo -e "\n${CYAN}[ Email & Account Settings ]${NC}"
+                echo "0) Go Back to Main Menu"
+                echo "1) Change Sender Gmail"
+                echo "2) Change App Password"
+                echo "3) Change Recipient Email"
+                echo "4) Toggle CC Preferences"
+                read -p "Choose an option (0-4): " sub_opt
+                
+                if [ "$sub_opt" == "0" ]; then
+                    break
+                elif [ "$sub_opt" == "1" ]; then
+                    read -p "New Sender Gmail: " s_email
+                    if [ ! -z "$s_email" ]; then save_val "sender_email" "\"$s_email\""; echo -e "${GREEN}✅ Updated.${NC}"; sleep 1.5; fi
+                elif [ "$sub_opt" == "2" ]; then
+                    read -p "New App Password: " s_pass
+                    if [ ! -z "$s_pass" ]; then save_val "app_password" "\"$s_pass\""; echo -e "${GREEN}✅ Updated.${NC}"; sleep 1.5; fi
+                elif [ "$sub_opt" == "3" ]; then
+                    read -p "New Recipient Email: " r_email
+                    if [ ! -z "$r_email" ]; then save_val "recipient_email" "\"$r_email\""; echo -e "${GREEN}✅ Updated.${NC}"; sleep 1.5; fi
+                elif [ "$sub_opt" == "4" ]; then
+                    read -p "CC yourself on all alerts? (y/n): " cc_choice
+                    if [[ "$cc_choice" =~ ^[Yy]$ ]]; then
+                        curr_sender=$(get_val sender_email)
+                        save_val "cc_email" "\"$curr_sender\""
+                        echo -e "${GREEN}✅ Updated.${NC}"; sleep 1.5;
+                    elif [[ "$cc_choice" =~ ^[Nn]$ ]]; then
+                        save_val "cc_email" "\"\""
+                        echo -e "${GREEN}✅ Updated.${NC}"; sleep 1.5;
+                    fi
+                fi
+            done
             ;;
         2)
-            echo -e "\n${CYAN}[ Trigger Words & Whitelist ]${NC}"
-            echo "0) Go Back"
-            echo "1) View Lists"
-            echo "2) Add Trigger Word(s)"
-            echo "3) Remove Trigger Word (by number)"
-            echo "4) Add Whitelist Domain"
-            echo "5) Remove Whitelist Domain (by number)"
-            read -p "Choose sub-option (0-5): " sub_opt
-            
-            if [ "$sub_opt" == "0" ]; then
-                continue
-            elif [ "$sub_opt" == "1" ]; then
-                echo -e "\n${YELLOW}Trigger Words:${NC}"
-                python3 -c "import json; [print(f'{i+1}) {w}') for i,w in enumerate(json.load(open('$CONFIG'))['trigger_words'])]"
-                echo -e "\n${YELLOW}Whitelist:${NC}"
-                python3 -c "import json; [print(f'{i+1}) {w}') for i,w in enumerate(json.load(open('$CONFIG'))['whitelist'])]"
-                read -p "Press [Enter] to return..."
-            elif [ "$sub_opt" == "2" ]; then
-                echo "Enter words to add (type '0' when finished):"
-                while true; do
-                    read -p "Word: " new_word
-                    if [ "$new_word" == "0" ] || [ -z "$new_word" ]; then break; fi
-                    python3 -c "import json; d=json.load(open('$CONFIG')); d['trigger_words'].append('$new_word') if '$new_word' not in d['trigger_words'] else None; json.dump(d, open('$CONFIG', 'w'), indent=4)"
-                done
-                python3 "$HOME/.webmonitor/monitor.py" --alert "added_trigger_words" 2>/dev/null
-            elif [ "$sub_opt" == "3" ]; then
-                echo -e "\n${YELLOW}Trigger Words:${NC}"
-                python3 -c "import json; [print(f'{i+1}) {w}') for i,w in enumerate(json.load(open('$CONFIG'))['trigger_words'])]"
-                read -p "Enter number to remove (or 0 to cancel): " rem_num
-                if [ "$rem_num" != "0" ] && [[ "$rem_num" =~ ^[0-9]+$ ]]; then
-                    python3 -c "import json; d=json.load(open('$CONFIG')); w=d['trigger_words']; val=w[$rem_num-1] if 0<=$rem_num-1<len(w) else None; w.remove(val) if val else None; json.dump(d, open('$CONFIG', 'w'), indent=4) if val else None"
-                    python3 "$HOME/.webmonitor/monitor.py" --alert "removed_trigger_words" 2>/dev/null
+            while true; do
+                clear
+                echo -e "\n${CYAN}[ Trigger Words & Whitelist ]${NC}"
+                echo "0) Go Back to Main Menu"
+                echo "1) View Lists"
+                echo "2) Add Trigger Word(s)"
+                echo "3) Remove Trigger Word (by number)"
+                echo "4) Add Whitelist Domain(s)"
+                echo "5) Remove Whitelist Domain (by number)"
+                read -p "Choose sub-option (0-5): " sub_opt
+                
+                if [ "$sub_opt" == "0" ]; then
+                    break
+                elif [ "$sub_opt" == "1" ]; then
+                    echo -e "\n${YELLOW}Trigger Words:${NC}"
+                    python3 -c "import json; [print(f'{i+1}) {w}') for i,w in enumerate(json.load(open('$CONFIG'))['trigger_words'])]"
+                    echo -e "\n${YELLOW}Whitelist:${NC}"
+                    python3 -c "import json; [print(f'{i+1}) {w}') for i,w in enumerate(json.load(open('$CONFIG'))['whitelist'])]"
+                    read -p "Press [Enter] to return..."
+                elif [ "$sub_opt" == "2" ]; then
+                    echo "Enter words to add (type '0' when finished):"
+                    while true; do
+                        read -p "Word: " new_word
+                        if [ "$new_word" == "0" ] || [ -z "$new_word" ]; then break; fi
+                        python3 -c "import json; d=json.load(open('$CONFIG')); d['trigger_words'].append('$new_word') if '$new_word' not in d['trigger_words'] else None; json.dump(d, open('$CONFIG', 'w'), indent=4)"
+                    done
+                    python3 "$HOME/.webmonitor/monitor.py" --alert "added_trigger_words" 2>/dev/null
+                elif [ "$sub_opt" == "3" ]; then
+                    while true; do
+                        clear
+                        echo -e "\n${YELLOW}Trigger Words:${NC}"
+                        python3 -c "import json; [print(f'{i+1}) {w}') for i,w in enumerate(json.load(open('$CONFIG'))['trigger_words'])]"
+                        read -p "Enter number to remove (or 0 to go back): " rem_num
+                        if [ "$rem_num" == "0" ] || [ -z "$rem_num" ]; then break; fi
+                        if [[ "$rem_num" =~ ^[0-9]+$ ]]; then
+                            python3 -c "import json; d=json.load(open('$CONFIG')); w=d['trigger_words']; val=w[$rem_num-1] if 0<=$rem_num-1<len(w) else None; w.remove(val) if val else None; json.dump(d, open('$CONFIG', 'w'), indent=4) if val else None"
+                            python3 "$HOME/.webmonitor/monitor.py" --alert "removed_trigger_words" 2>/dev/null
+                            echo -e "${GREEN}✅ Word removed.${NC}"
+                            sleep 1
+                        fi
+                    done
+                elif [ "$sub_opt" == "4" ]; then
+                    echo "Enter domains to whitelist (type '0' when finished):"
+                    while true; do
+                        read -p "Domain: " wl_dom
+                        if [ "$wl_dom" == "0" ] || [ -z "$wl_dom" ]; then break; fi
+                        python3 -c "import json; d=json.load(open('$CONFIG')); d['whitelist'].append('$wl_dom') if '$wl_dom' not in d['whitelist'] else None; json.dump(d, open('$CONFIG', 'w'), indent=4)"
+                    done
+                elif [ "$sub_opt" == "5" ]; then
+                    while true; do
+                        clear
+                        echo -e "\n${YELLOW}Whitelist:${NC}"
+                        python3 -c "import json; [print(f'{i+1}) {w}') for i,w in enumerate(json.load(open('$CONFIG'))['whitelist'])]"
+                        read -p "Enter number to remove (or 0 to go back): " rem_num
+                        if [ "$rem_num" == "0" ] || [ -z "$rem_num" ]; then break; fi
+                        if [[ "$rem_num" =~ ^[0-9]+$ ]]; then
+                            python3 -c "import json; d=json.load(open('$CONFIG')); w=d['whitelist']; val=w[$rem_num-1] if 0<=$rem_num-1<len(w) else None; w.remove(val) if val else None; json.dump(d, open('$CONFIG', 'w'), indent=4) if val else None"
+                            echo -e "${GREEN}✅ Domain removed.${NC}"
+                            sleep 1
+                        fi
+                    done
                 fi
-            elif [ "$sub_opt" == "4" ]; then
-                read -p "Enter domain to whitelist (or 0 to cancel): " wl_dom
-                if [ "$wl_dom" != "0" ]; then
-                    python3 -c "import json; d=json.load(open('$CONFIG')); d['whitelist'].append('$wl_dom') if '$wl_dom' not in d['whitelist'] else None; json.dump(d, open('$CONFIG', 'w'), indent=4)"
-                fi
-            elif [ "$sub_opt" == "5" ]; then
-                echo -e "\n${YELLOW}Whitelist:${NC}"
-                python3 -c "import json; [print(f'{i+1}) {w}') for i,w in enumerate(json.load(open('$CONFIG'))['whitelist'])]"
-                read -p "Enter number to remove (or 0 to cancel): " rem_num
-                if [ "$rem_num" != "0" ] && [[ "$rem_num" =~ ^[0-9]+$ ]]; then
-                    python3 -c "import json; d=json.load(open('$CONFIG')); w=d['whitelist']; val=w[$rem_num-1] if 0<=$rem_num-1<len(w) else None; w.remove(val) if val else None; json.dump(d, open('$CONFIG', 'w'), indent=4) if val else None"
-                fi
-            fi
-            echo -e "${GREEN}✅ Update complete.${NC}"
-            sleep 2
+            done
             ;;
         3)
-            echo -e "\n${CYAN}[ Alert Toggles ]${NC}"
-            python3 -c "import json; d=json.load(open('$CONFIG'))['alerts']; [print(f'- {k}: {\"ON\" if v else \"OFF\"}') for k,v in d.items()]"
-            read -p "Enter the exact alert name to toggle: " alert_name
-            python3 -c "import json; d=json.load(open('$CONFIG')); d['alerts']['$alert_name'] = not d['alerts'].get('$alert_name', True) if '$alert_name' in d['alerts'] else True; json.dump(d, open('$CONFIG', 'w'), indent=4)" 2>/dev/null
-            status=$(python3 -c "import json; d=json.load(open('$CONFIG')); print('ON' if d['alerts'].get('$alert_name', False) else 'OFF')")
-            python3 "$HOME/.webmonitor/monitor.py" --alert "settings_adjusted" "Alert toggle '$alert_name' changed to: $status" 2>/dev/null
-            echo -e "${GREEN}✅ Alert toggle updated.${NC}"
-            sleep 2
+            while true; do
+                clear
+                echo -e "\n${CYAN}[ Alert Toggles ]${NC}"
+                python3 -c "import json; d=json.load(open('$CONFIG'))['alerts']; [print(f'- {k}: {\"ON\" if v else \"OFF\"}') for k,v in d.items()]"
+                echo -e "\nType the exact alert name to toggle, or type '0' to go back."
+                read -p "Alert name: " alert_name
+                
+                if [ "$alert_name" == "0" ] || [ -z "$alert_name" ]; then break; fi
+                
+                python3 -c "import json; d=json.load(open('$CONFIG')); d['alerts']['$alert_name'] = not d['alerts'].get('$alert_name', True) if '$alert_name' in d['alerts'] else True; json.dump(d, open('$CONFIG', 'w'), indent=4)" 2>/dev/null
+                status=$(python3 -c "import json; d=json.load(open('$CONFIG')); print('ON' if d['alerts'].get('$alert_name', False) else 'OFF')")
+                python3 "$HOME/.webmonitor/monitor.py" --alert "settings_adjusted" "Alert toggle '$alert_name' changed to: $status" 2>/dev/null
+                echo -e "${GREEN}✅ Alert toggle '$alert_name' updated to $status.${NC}"
+                sleep 1.5
+            done
             ;;
         4)
             echo -e "\n${YELLOW}Cycling native daemon service...${NC}"
