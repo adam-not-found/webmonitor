@@ -28,7 +28,7 @@ if [ ! -f "$CONFIG" ] || [ "$(get_val sender_email)" == "" ] || [ "$(get_val sen
     echo -e "${CYAN}🛡️  WEBMONITOR FIRST-TIME SETUP${NC}"
     echo "=================================="
     mkdir -p "$HOME/.webmonitor"
-    echo '{"menu_bar_icon": "🦉", "sender_email":"","app_password":"","recipient_email":"","cc_email":"","whitelist":[],"trigger_words":[],"alerts":{"word_found":true,"added_trigger_words":true,"removed_trigger_words":true,"service_restarted":true,"service_stopped":true,"settings_adjusted":true}}' > "$CONFIG"
+    echo '{"menu_bar_icon": "🦉", "sender_email":"","app_password":"","recipient_email":"","cc_email":"","whitelist":[],"trigger_words":[],"alerts":{"word_found":true,"added_trigger_words":false,"removed_trigger_words":true,"added_whitelist":true,"removed_whitelist":true}}' > "$CONFIG"
 
     # Step 1: Emails
     read -p "Enter Sender Gmail: " s_email

@@ -138,14 +138,17 @@ def monitor_loop():
                     pattern = r'\b' + re.escape(clean_w) + r'\b'
                     
                     if re.search(pattern, typed_text.lower()):
-                        current_context = f"{clean_w}|{typed_text}"
+                        try:
+                            app_script = 'tell application "System Events" to get name of first application process whose frontmost is true'
+                            active_app = subprocess.check_output(['osascript', '-e', app_script]).decode().strip()
+                        except Exception:
+                            active_app = "Active Window"
+
+                        # Track unique triggers by mapping to the application context instead of live strings
+                        current_context = f"{clean_w}|{active_app}"
                         
                         if current_context != last_trigger_context:
                             last_trigger_context = current_context
-                            
-                            # Grab the name of the active app for the email alert context
-                            app_script = 'tell application "System Events" to get name of first application process whose frontmost is true'
-                            active_app = subprocess.check_output(['osascript', '-e', app_script]).decode().strip()
                             
                             os.system(f'osascript -e \'display notification "Trigger: {word} in {active_app}" with title "🛡️ WebMonitor"\'')
                             handle_event("word_found", f"Trigger Word: {word}\nApplication: {active_app}\nCaptured Context: {typed_text}")
