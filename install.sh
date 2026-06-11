@@ -49,10 +49,19 @@ if ! command -v python3 &> /dev/null; then
 fi
 echo -e "${GREEN}✔ Python 3 Environment Found.${NC}"
 
+# ====================================================================
+# FAILSAFE: Move Dynamic Path Discovery Here (Before Pip Commands)
+# ====================================================================
+TARGET_PYTHON=$(which python3)
+if [[ "$TARGET_PYTHON" == "/usr/bin/python3" ]] && [ -f "/Library/Frameworks/Python.framework/Versions/Current/bin/python3" ]; then
+    TARGET_PYTHON="/Library/Frameworks/Python.framework/Versions/Current/bin/python3"
+fi
+
 # Ensure required Python networking libraries are installed globally/locally
 echo "Checking Python library dependencies..."
-python3 -m pip install --upgrade pip &>/dev/null
-python3 -m pip install requests secure-smtplib &>/dev/null
+$TARGET_PYTHON -m pip install --upgrade pip &>/dev/null
+# Force installation directly to the target verified python framework space
+$TARGET_PYTHON -m pip install --break-system-packages requests secure-smtplib &>/dev/null
 
 # 4. Verify SwiftBar UI presentation wrapper presence
 if ! open -Ra "SwiftBar" &> /dev/null; then
@@ -166,3 +175,6 @@ read -p "Press [Enter] once you have verified these security assignments..."
 echo -e "\n${CYAN}[ Starting Onboarding Profile Configuration Wizard... ]${NC}"
 clear
 bash "$TARGET_DIR/webmonitor.sh"
+
+# Force SwiftBar to refresh its UI and show the owl
+open -g "swiftbar://refreshall"
