@@ -2,12 +2,12 @@
 clear
 
 # Color Palette
-BLUE='\033[0;34m'
-GREEN='\033[0;32m'
-RED='\033[0;31m'
+BLUE='\033;34m'
+GREEN='\033;32m'
+RED='\033;31m'
 YELLOW='\033[1;33m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
+PURPLE='\033;35m'
+CYAN='\033;36m'
 WHITE='\033[1;37m'
 NC='\033[0m' # No Color
 
@@ -122,22 +122,38 @@ while true; do
                     break
                 elif [ "$sub_opt" == "1" ]; then
                     read -p "New Sender Gmail: " s_email
-                    if [ ! -z "$s_email" ]; then save_val "sender_email" "\"$s_email\""; echo -e "${GREEN}✅ Updated.${NC}"; sleep 1.5; fi
+                    if [ ! -z "$s_email" ]; then
+                        old_val=$(get_val sender_email)
+                        save_val "sender_email" "\"$s_email\""
+                        $TARGET_PYTHON "$HOME/.webmonitor/monitor.py" --alert "settings_adjusted" "Sender Gmail changed from '$old_val' to '$s_email'" 2>/dev/null
+                        echo -e "${GREEN}✅ Updated.${NC}"; sleep 1.5;
+                    fi
                 elif [ "$sub_opt" == "2" ]; then
                     read -p "New App Password: " s_pass
-                    if [ ! -z "$s_pass" ]; then save_val "app_password" "\"$s_pass\""; echo -e "${GREEN}✅ Updated.${NC}"; sleep 1.5; fi
+                    if [ ! -z "$s_pass" ]; then
+                        save_val "app_password" "\"$s_pass\""
+                        $TARGET_PYTHON "$HOME/.webmonitor/monitor.py" --alert "settings_adjusted" "Sender App Password was updated" 2>/dev/null
+                        echo -e "${GREEN}✅ Updated.${NC}"; sleep 1.5;
+                    fi
                 elif [ "$sub_opt" == "3" ]; then
                     read -p "New Recipient Email: " r_email
-                    if [ ! -z "$r_email" ]; then save_val "recipient_email" "\"$r_email\""; echo -e "${GREEN}✅ Updated.${NC}"; sleep 1.5; fi
+                    if [ ! -z "$r_email" ]; then
+                        old_val=$(get_val recipient_email)
+                        save_val "recipient_email" "\"$r_email\""
+                        $TARGET_PYTHON "$HOME/.webmonitor/monitor.py" --alert "settings_adjusted" "Recipient Email changed from '$old_val' to '$r_email'" 2>/dev/null
+                        echo -e "${GREEN}✅ Updated.${NC}"; sleep 1.5;
+                    fi
                 elif [ "$sub_opt" == "4" ]; then
                     read -p "CC yourself on all alerts? (y/n): " cc_choice
                     if [[ "$cc_choice" =~ ^[Yy]$ ]]; then
                         curr_sender=$(get_val sender_email)
                         save_val "cc_email" "\"$curr_sender\""
-                        echo -e "${GREEN}✅ Updated.${NC}"; sleep 1.5;
+                        $TARGET_PYTHON "$HOME/.webmonitor/monitor.py" --alert "settings_adjusted" "CC Preferences enabled (Auto CC to '$curr_sender')" 2>/dev/null
+                        echo -e "${GREEN}✅ Updated.${NC}; sleep 1.5;"
                     elif [[ "$cc_choice" =~ ^[Nn]$ ]]; then
                         save_val "cc_email" "\"\""
-                        echo -e "${GREEN}✅ Updated.${NC}"; sleep 1.5;
+                        $TARGET_PYTHON "$HOME/.webmonitor/monitor.py" --alert "settings_adjusted" "CC Preferences disabled" 2>/dev/null
+                        echo -e "${GREEN}✅ Updated.${NC}; sleep 1.5;"
                     fi
                 fi
             done
@@ -164,12 +180,16 @@ while true; do
                     read -p "Press [Enter] to return..."
                 elif [ "$sub_opt" == "2" ]; then
                     echo "Enter words to add (type '0' when finished):"
+                    added_words=""
                     while true; do
                         read -p "Word: " new_word
                         if [ "$new_word" == "0" ] || [ -z "$new_word" ]; then break; fi
                         python3 -c "import json; d=json.load(open('$CONFIG')); d['trigger_words'].append('$new_word') if '$new_word' not in d['trigger_words'] else None; json.dump(d, open('$CONFIG', 'w'), indent=4)"
+                        added_words="$added_words $new_word"
                     done
-                    python3 "$HOME/.webmonitor/monitor.py" --alert "added_trigger_words" 2>/dev/null
+                    if [ ! -z "$added_words" ]; then
+                        $TARGET_PYTHON "$HOME/.webmonitor/monitor.py" --alert "settings_adjusted" "Added Trigger Word(s): $(echo $added_words)" 2>/dev/null
+                    fi
                 elif [ "$sub_opt" == "3" ]; then
                     while true; do
                         clear
@@ -178,19 +198,27 @@ while true; do
                         read -p "Enter number to remove (or 0 to go back): " rem_num
                         if [ "$rem_num" == "0" ] || [ -z "$rem_num" ]; then break; fi
                         if [[ "$rem_num" =~ ^[0-9]+$ ]]; then
-                            python3 -c "import json; d=json.load(open('$CONFIG')); w=d['trigger_words']; val=w[$rem_num-1] if 0<=$rem_num-1<len(w) else None; w.remove(val) if val else None; json.dump(d, open('$CONFIG', 'w'), indent=4) if val else None"
-                            python3 "$HOME/.webmonitor/monitor.py" --alert "removed_trigger_words" 2>/dev/null
-                            echo -e "${GREEN}✅ Word removed.${NC}"
-                            sleep 1
+                            target_val=$(python3 -c "import json; d=json.load(open('$CONFIG')); w=d['trigger_words']; print(w[$rem_num-1]) if 0<=$rem_num-1<len(w) else print('')" 2>/dev/null)
+                            if [ ! -z "$target_val" ]; then
+                                python3 -c "import json; d=json.load(open('$CONFIG')); w=d['trigger_words']; w.remove('$target_val'); json.dump(d, open('$CONFIG', 'w'), indent=4)"
+                                $TARGET_PYTHON "$HOME/.webmonitor/monitor.py" --alert "settings_adjusted" "Removed Trigger Word: '$target_val'" 2>/dev/null
+                                echo -e "${GREEN}✅ Word removed.${NC}"
+                                sleep 1
+                            fi
                         fi
                     done
                 elif [ "$sub_opt" == "4" ]; then
                     echo "Enter domains to whitelist (type '0' when finished):"
+                    added_doms=""
                     while true; do
                         read -p "Domain: " wl_dom
                         if [ "$wl_dom" == "0" ] || [ -z "$wl_dom" ]; then break; fi
                         python3 -c "import json; d=json.load(open('$CONFIG')); d['whitelist'].append('$wl_dom') if '$wl_dom' not in d['whitelist'] else None; json.dump(d, open('$CONFIG', 'w'), indent=4)"
+                        added_doms="$added_doms $wl_dom"
                     done
+                    if [ ! -z "$added_doms" ]; then
+                        $TARGET_PYTHON "$HOME/.webmonitor/monitor.py" --alert "settings_adjusted" "Added Whitelist Domain(s): $(echo $added_doms)" 2>/dev/null
+                    fi
                 elif [ "$sub_opt" == "5" ]; then
                     while true; do
                         clear
@@ -199,9 +227,13 @@ while true; do
                         read -p "Enter number to remove (or 0 to go back): " rem_num
                         if [ "$rem_num" == "0" ] || [ -z "$rem_num" ]; then break; fi
                         if [[ "$rem_num" =~ ^[0-9]+$ ]]; then
-                            python3 -c "import json; d=json.load(open('$CONFIG')); w=d['whitelist']; val=w[$rem_num-1] if 0<=$rem_num-1<len(w) else None; w.remove(val) if val else None; json.dump(d, open('$CONFIG', 'w'), indent=4) if val else None"
-                            echo -e "${GREEN}✅ Domain removed.${NC}"
-                            sleep 1
+                            target_val=$(python3 -c "import json; d=json.load(open('$CONFIG')); w=d['whitelist']; print(w[$rem_num-1]) if 0<=$rem_num-1<len(w) else print('')" 2>/dev/null)
+                            if [ ! -z "$target_val" ]; then
+                                python3 -c "import json; d=json.load(open('$CONFIG')); w=d['whitelist']; w.remove('$target_val'); json.dump(d, open('$CONFIG', 'w'), indent=4)"
+                                $TARGET_PYTHON "$HOME/.webmonitor/monitor.py" --alert "settings_adjusted" "Removed Whitelist Domain: '$target_val'" 2>/dev/null
+                                echo -e "${GREEN}✅ Domain removed.${NC}"
+                                sleep 1
+                            fi
                         fi
                     done
                 fi
