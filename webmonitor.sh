@@ -178,9 +178,16 @@ while true; do
             python3 "$HOME/.webmonitor/monitor.py" --alert "settings_adjusted" "Alert toggle '$key' changed to: $status"
            done ;;
         4) echo -e "${YELLOW}Cycling native daemon service...${NC}"
+           # 1. Force fully bootout the current daemon registration state to clear the launchd slot
            launchctl bootout gui/$(id -u) "$PLIST_PATH" 2>/dev/null
-           sleep 1
+           
+           # 2. Give macOS a brief window to flush the process memory map
+           sleep 15
+           
+           # 3. Cleanly bootstrap the service into memory (this guarantees no more 5: Input/output errors)
            launchctl bootstrap gui/$(id -u) "$PLIST_PATH"
+           
+           # 4. Fire the internal telemetry alert notification
            python3 "$HOME/.webmonitor/monitor.py" --alert "service_restarted"
            echo -e "${GREEN}✅ Engine Successfully Restarted.${NC}" ;;
         5) read -p "⚠️ ARE YOU SURE? This will stop the monitor and delete all settings. (y/n): " confirm
