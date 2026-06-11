@@ -55,42 +55,42 @@ if [ ! -f "$CONFIG" ] || [ "$(get_val sender_email)" == "" ] || [ "$(get_val sen
     done
 
     echo -e "${GREEN}✅ First-time setup complete!${NC}"
-        
-        # Automatically bootstrap the engine with the fresh config
-        echo -e "${YELLOW}Initializing daemon with new configuration...${NC}"
-        launchctl bootout gui/$(id -u) "$PLIST_PATH" 2>/dev/null
-        sleep 1.5
-        launchctl bootstrap gui/$(id -u) "$PLIST_PATH"
-        open -g "swiftbar://refreshall"
-    fi
-        # --- SWIFTBAR FIRST-LAUNCH ACTIVATION ---
-        echo -e "\n${CYAN}[ Finalizing SwiftBar Automation... ]${NC}"
-        pkill -x "SwiftBar" 2>/dev/null
-    
-    # Inject preferences directly
-    mkdir -p "$HOME/Library/Preferences"
-    cat << EOF > /tmp/app.swiftbar.plist
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>pluginsFolder</key>
-    <string>$HOME/.webmonitor/plugins</string>
-</dict>
-</plist>
-EOF
-    defaults import app.swiftbar /tmp/app.swiftbar.plist
-    rm -f /tmp/app.swiftbar.plist
-    killall cfprefsd 2>/dev/null
-    open -a "SwiftBar" 2>/dev/null
+            
+            # Automatically bootstrap the engine with the fresh config
+            echo -e "${YELLOW}Initializing daemon with new configuration...${NC}"
+            launchctl bootout gui/$(id -u) "$PLIST_PATH" 2>/dev/null
+            sleep 1.5
+            launchctl bootstrap gui/$(id -u) "$PLIST_PATH"
+            open -g "swiftbar://refreshall"
 
-    echo -e "${GREEN}✔ SwiftBar configuration successfully mapped.${NC}"
-    echo -e "${YELLOW}====================================================${NC}"
-    echo -e " NOTICE: If your owl (🦉) is not visible in the menu bar:"
-    echo -e " Press ${CYAN}Cmd + Space${NC}, type ${GREEN}SwiftBar${NC}, and press Enter to wake it."
-    echo -e "${YELLOW}====================================================${NC}"
-    read -p "Press [Enter] to open your new WebMonitor Dashboard..."
-fi
+            # --- SWIFTBAR FIRST-LAUNCH ACTIVATION ---
+            echo -e "\n${CYAN}[ Finalizing SwiftBar Automation... ]${NC}"
+            pkill -x "SwiftBar" 2>/dev/null
+        
+        # Inject preferences directly
+        mkdir -p "$HOME/Library/Preferences"
+        cat << EOF > /tmp/app.swiftbar.plist
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+        <key>pluginsFolder</key>
+        <string>$HOME/.webmonitor/plugins</string>
+    </dict>
+    </plist>
+    EOF
+        defaults import app.swiftbar /tmp/app.swiftbar.plist
+        rm -f /tmp/app.swiftbar.plist
+        killall cfprefsd 2>/dev/null
+        open -a "SwiftBar" 2>/dev/null
+
+        echo -e "${GREEN}✔ SwiftBar configuration successfully mapped.${NC}"
+        echo -e "${YELLOW}====================================================${NC}"
+        echo -e " NOTICE: If your owl (🦉) is not visible in the menu bar:"
+        echo -e " Press ${CYAN}Cmd + Space${NC}, type ${GREEN}SwiftBar${NC}, and press Enter to wake it."
+        echo -e "${YELLOW}====================================================${NC}"
+        read -p "Press [Enter] to open your new WebMonitor Dashboard..."
+    fi
 
 # --- FULL DASHBOARD ---
 manage_list() {
