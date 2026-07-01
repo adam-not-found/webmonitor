@@ -259,7 +259,11 @@ while true; do
         4)
             echo -e "\n${YELLOW}Cycling native daemon service...${NC}"
             
-            # Re-generate the plist to make sure it contains the active discovered Python path
+            # Recompile and instantly sign the binary to preserve system trust
+            swiftc "$HOME/.webmonitor/monitor.swift" -o "${HOME}/.webmonitor/scanner" 2>/dev/null
+            codesign -s - --force "${HOME}/.webmonitor/scanner" 2>/dev/null
+
+            # Re-generate the plist to track the native binary target
             cat << EOF > "$PLIST_PATH"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -269,8 +273,7 @@ while true; do
     <string>com.user.webmonitor</string>
     <key>ProgramArguments</key>
     <array>
-        <string>$TARGET_PYTHON</string>
-        <string>${HOME}/.webmonitor/monitor.py</string>
+        <string>${HOME}/.webmonitor/scanner</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
@@ -285,12 +288,10 @@ while true; do
 EOF
             chmod 644 "$PLIST_PATH"
 
-            # Cleanly cycle the launchd engine slot
             launchctl bootout gui/$(id -u) "$PLIST_PATH" 2>/dev/null
             sleep 1.5
             launchctl bootstrap gui/$(id -u) "$PLIST_PATH" 2>/dev/null
             
-            # Fire telemetry alert using the matching executable context
             $TARGET_PYTHON "$HOME/.webmonitor/monitor.py" --alert "service_restarted" 2>/dev/null
             echo -e "${GREEN}✅ Engine Successfully Restarted.${NC}"
             sleep 2
