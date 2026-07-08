@@ -90,20 +90,22 @@ mkdir -p "$TARGET_DIR"
 mkdir -p "$PLUGIN_DIR"
 mkdir -p "$LAUNCH_AGENT_DIR"
 
-cat << EOF > "$LAUNCH_AGENT_DIR/com.user.webmonitor.plist"
-
 # Move executable files inside home deployment spaces
 cp monitor.py "$TARGET_DIR/monitor.py"
 cp webmonitor.sh "$TARGET_DIR/webmonitor.sh"
 chmod +x "$TARGET_DIR/webmonitor.sh"
 
+# Compile the fast visual scanning daemon binary directly into the engine directory
+echo "Compiling native ScreenCaptureKit backend engine..."
+swiftc monitor.swift -o "$TARGET_DIR/scanner"
+codesign -s - --force "$TARGET_DIR/scanner"
+
 # Build the custom SwiftBar shell plugin loop
 cat << 'EOF' > "$PLUGIN_DIR/webmonitor.3s.sh"
 #!/bin/bash
-CONFIG_PATH="$HOME/.webmonitor/config.json"
-if pgrep -f "monitor.py" > /dev/null; then
-    ICON=$(osascript -l JavaScript -e "JSON.parse(ObjC.unwrap($.NSString.stringWithContentsOfFileEncodingError(os.path.expanduser('~/.webmonitor/config.json'), $.NSUTF8StringEncoding, null))).menu_bar_icon" 2>/dev/null)
-    if [ -z "$ICON" ] || [ "$ICON" == "undefined" ]; then ICON="🦉"; fi
+if pgrep -f ".webmonitor/scanner" > /dev/null; then
+    ICON=$(python3 -c "import json, os; print(json.load(open(os.path.expanduser('~/.webmonitor/config.json')))['menu_bar_icon'])" 2>/dev/null)
+    if [ -z "$ICON" ] || [ "$ICON" == "None" ]; then ICON="🦉"; fi
     echo "$ICON"
 else
     echo "⚠️"
@@ -113,12 +115,10 @@ echo "Open Dashboard | bash='$HOME/.webmonitor/webmonitor.sh' terminal=true"
 EOF
 chmod +x "$PLUGIN_DIR/webmonitor.3s.sh"
 
-echo "Mapping background daemon execution layer to: $TARGET_PYTHON"
-
 # Force load cycle clearance by unloading any existing active profile instances
 launchctl bootout gui/$(id -u) "$LAUNCH_AGENT_DIR/com.user.webmonitor.plist" 2>/dev/null
 
-# Dynamically construct the LaunchAgent file directly into system space
+# Dynamically construct the LaunchAgent file targeting the native binary executable
 cat << EOF > "$LAUNCH_AGENT_DIR/com.user.webmonitor.plist"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -128,8 +128,7 @@ cat << EOF > "$LAUNCH_AGENT_DIR/com.user.webmonitor.plist"
     <string>com.user.webmonitor</string>
     <key>ProgramArguments</key>
     <array>
-        <string>${TARGET_PYTHON}</string>
-        <string>${TARGET_DIR}/monitor.py</string>
+        <string>${TARGET_DIR}/scanner</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
@@ -143,10 +142,7 @@ cat << EOF > "$LAUNCH_AGENT_DIR/com.user.webmonitor.plist"
 </plist>
 EOF
 
-# Enforce secure macOS LaunchAgent file permissions
 chmod 644 "$LAUNCH_AGENT_DIR/com.user.webmonitor.plist"
-
-# Bootstrap and initialize the background engine layer immediately
 launchctl bootstrap gui/$(id -u) "$LAUNCH_AGENT_DIR/com.user.webmonitor.plist"
 
 echo -e "${GREEN}✔ Component directories structured and mapped successfully.${NC}"

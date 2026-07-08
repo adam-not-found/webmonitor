@@ -1,6 +1,7 @@
 import Cocoa
 import Vision
 import ScreenCaptureKit
+import Foundation
 
 _ = NSApplication.shared
 _ = CGMainDisplayID()
@@ -20,7 +21,6 @@ func loadTriggerWords() -> [String] {
     return config.trigger_words.map { $0.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) }
 }
 
-// Low-overhead AppleScript execution to pull native text directly from Safari's DOM layer
 func fetchSafariDOMText() -> String {
     let scriptSource = "tell application \"Safari\" to if (count of documents) > 0 then return text of front document"
     if let appleScript = NSAppleScript(source: scriptSource) {
@@ -33,6 +33,15 @@ func fetchSafariDOMText() -> String {
     return ""
 }
 
+// Grabs a 120-character snippet surrounding the trigger word to explain the alert reason
+func extractContext(around word: String, in text: String) -> String {
+    guard let range = text.range(of: word, options: .caseInsensitive) else { return "Context unavailable" }
+    let startIndex = text.index(range.lowerBound, offsetBy: -60, limitedBy: text.startIndex) ?? text.startIndex
+    let endIndex = text.index(range.upperBound, offsetBy: 60, limitedBy: text.endIndex) ?? text.endIndex
+    let snippet = text[startIndex..<endIndex]
+    return "..." + snippet.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\n", with: " ") + "..."
+}
+
 var windowAlertTimestamps: [String: Date] = [:]
 let cooldownDuration: TimeInterval = 60.0
 
@@ -40,14 +49,14 @@ Task {
     while true {
         do {
             guard let frontmostApp = NSWorkspace.shared.frontmostApplication else {
-                try await Task.sleep(nanoseconds: 2_000_000_000)
+                try await Task.sleep(nanoseconds: 5_000_000_000)
                 continue
             }
             let pid = frontmostApp.processIdentifier
             let appName = frontmostApp.localizedName ?? "Unknown App"
             
             if appName == "Terminal" || appName == "Xcode" {
-                try await Task.sleep(nanoseconds: 1_000_000_000)
+                try await Task.sleep(nanoseconds: 2_000_000_000)
                 continue
             }
             
@@ -58,19 +67,16 @@ Task {
                 $0.title != nil && !$0.title!.isEmpty &&
                 $0.frame.width > 100 && $0.frame.height > 100
             }) else {
-                try await Task.sleep(nanoseconds: 1_000_000_000)
+                try await Task.sleep(nanoseconds: 2_000_000_000)
                 continue
             }
             
             let windowTitle = targetWindow.title ?? "Active Window"
             var textBuffer = ""
             
-            // --- HYBRID ROUTING LAYER ---
             if appName == "Safari" {
-                // Route A: Fast, 0-CPU document text dump
-                textBuffer = fetchSafariDOMText().lowercased()
+                textBuffer = fetchSafariDOMText()
             } else {
-                // Route B: Fallback to hardware accelerated OCR for Chrome, DuckDuckGo, and other apps
                 let filter = SCContentFilter(desktopIndependentWindow: targetWindow)
                 let config = SCStreamConfiguration()
                 config.showsCursor = false
@@ -81,27 +87,29 @@ Task {
                 
                 let requestHandler = VNImageRequestHandler(cgImage: screenshot, options: [:])
                 let textRequest = VNRecognizeTextRequest()
-                textRequest.recognitionLevel = .fast
-                textRequest.usesLanguageCorrection = false
+                
+                // FIXED: Changed to heavy deep-learning neural network mode to stop visual hallucinations
+                textRequest.recognitionLevel = .accurate
+                textRequest.usesLanguageCorrection = true
                 
                 try requestHandler.perform([textRequest])
                 
                 if let observations = textRequest.results {
                     for observation in observations {
                         if let topCandidate = observation.topCandidates(1).first {
-                            textBuffer += topCandidate.string.lowercased() + " "
+                            textBuffer += topCandidate.string + " "
                         }
                     }
                 }
             }
             
-            // --- EVALUATION & DISPATCH ---
             let triggerWords = loadTriggerWords()
             var matchFound = false
             var matchedWord = ""
             
+            let lowercasedBuffer = textBuffer.lowercased()
             for word in triggerWords {
-                if !word.isEmpty && textBuffer.contains(word) {
+                if !word.isEmpty && lowercasedBuffer.contains(word) {
                     matchFound = true
                     matchedWord = word
                     break
@@ -112,11 +120,15 @@ Task {
                 let now = Date()
                 if let lastAlertDate = windowAlertTimestamps[windowTitle],
                    now.timeIntervalSince(lastAlertDate) < cooldownDuration {
-                    // Silently block repeats during cooldown
+                    // Cooldown active
                 } else {
                     windowAlertTimestamps[windowTitle] = now
                     
-                    let pythonPayload = "Trigger Word: \(matchedWord)\nApplication: \(appName)\nCaptured Window Context: \(windowTitle)"
+                    // Extract the text snippet context to attach as the "Reason"
+                    let flaggedReason = extractContext(around: matchedWord, in: textBuffer)
+                    
+                    let pythonPayload = "Trigger Word: \(matchedWord)\nApplication: \(appName)\nCaptured Window Context: \(windowTitle)\nFlagged Reason: \(flaggedReason)"
+                    
                     let process = Process()
                     process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
                     process.arguments = ["python3", "\(NSHomeDirectory())/.webmonitor/monitor.py", "--alert", "word_found", pythonPayload]
@@ -125,10 +137,11 @@ Task {
             }
             
         } catch {
-            // Context safety wrap
+            // Safety context wrap
         }
         
-        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        // FIXED: Lowered sampling frequency to every 20 seconds to balance accuracy and system resources
+        try? await Task.sleep(nanoseconds: 20_000_000_000)
     }
 }
 
