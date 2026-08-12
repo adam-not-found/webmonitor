@@ -1,6 +1,6 @@
 #!/bin/bash
 
-CONFIG_PATH="/Users/adam.erickson/.webmonitor/config.json"
+CONFIG_PATH="$HOME/.webmonitor/config.json"
 
 # Check if the native scanner daemon is actively running
 if pgrep -f "scanner" > /dev/null; then
